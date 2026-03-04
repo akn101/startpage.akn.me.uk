@@ -49,7 +49,14 @@ export default function RecentVisitors() {
         <div className="feed-empty">No visitors captured yet</div>
       ) : (
         <div className="visitors-list">
-          {visitors.slice(0, 5).map((v) => (
+          {/* Dedup display: keep only the latest entry per label */}
+          {visitors
+            .reduce<Visitor[]>((acc, v) => {
+              if (!acc.find((x) => x.face_label === v.face_label)) acc.push(v);
+              return acc;
+            }, [])
+            .slice(0, 5)
+            .map((v) => (
             <div key={v.id} className="visitor-item">
               {v.imageUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -65,7 +72,7 @@ export default function RecentVisitors() {
               </div>
             </div>
           ))}
-        </div>
+          </div>
       )}
     </div>
   );

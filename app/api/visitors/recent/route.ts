@@ -8,7 +8,7 @@ export async function GET() {
   const { data, error } = await db.from("visitors")
     .select("id, captured_at, face_label, image_path")
     .order("captured_at", { ascending: false })
-    .limit(10);
+    .limit(50);
 
   if (error) return Response.json({ error: error.message }, { status: 500 });
 

@@ -8,7 +8,6 @@ const MOTION_POLL_MS   = 500;
 const MOTION_THRESHOLD = 35;
 const MOTION_MIN_PCT   = 0.04;
 const CAPTURE_COOLDOWN = 8_000;
-const DEDUP_MS         = 30 * 60 * 1000; // 30 min dedup per label
 const MATCH_THRESHOLD  = 0.55;           // face descriptor distance
 const DESCRIPTORS_KEY  = "face_descriptors";
 
@@ -73,8 +72,6 @@ export default function CameraMonitor() {
   const streamRef    = useRef<MediaStream | null>(null);
   const modelLoaded  = useRef(false);
   const lastCapture  = useRef(0);
-  // Per-label dedup: label → last capture timestamp
-  const dedupMap     = useRef<Map<string, number>>(new Map());
 
   useEffect(() => {
     if (!authenticated) return;
@@ -155,11 +152,6 @@ export default function CameraMonitor() {
           // Always save descriptor back to reinforce recognition
           saveDescriptor(label, detections[0].descriptor);
         }
-
-        // 30-minute dedup: skip if same label was captured recently
-        const lastForLabel = dedupMap.current.get(label) ?? 0;
-        if (now - lastForLabel < DEDUP_MS) return;
-        dedupMap.current.set(label, now);
 
         const imageData = captureJpeg(video, canvasRef.current);
         fetch("/api/visitors/capture", {
