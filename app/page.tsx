@@ -64,6 +64,14 @@ export default function Page() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [showMini, setShowMini] = useState(false);
 
+  // Auto-refresh all data components every 30 minutes
+  useEffect(() => {
+    const id = setInterval(() => {
+      window.dispatchEvent(new CustomEvent("refreshData"));
+    }, 30 * 60 * 1000);
+    return () => clearInterval(id);
+  }, []);
+
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;

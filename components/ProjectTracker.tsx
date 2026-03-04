@@ -51,14 +51,19 @@ export default function ProjectTracker() {
   const { authenticated } = useAuth();
 
   useEffect(() => {
-    fetch("/api/tasks")
-      .then((r) => r.json())
-      .then(({ projects: p, tasks: t }) => {
-        setProjects(p ?? []);
-        setTasks(t ?? []);
-        setLoading(false);
-      })
-      .catch(() => setLoading(false));
+    const load = () => {
+      fetch("/api/tasks")
+        .then((r) => r.json())
+        .then(({ projects: p, tasks: t }) => {
+          setProjects(p ?? []);
+          setTasks(t ?? []);
+          setLoading(false);
+        })
+        .catch(() => setLoading(false));
+    };
+    load();
+    window.addEventListener("refreshData", load);
+    return () => window.removeEventListener("refreshData", load);
   }, []);
 
   const submitTask = (projectName: string) => {

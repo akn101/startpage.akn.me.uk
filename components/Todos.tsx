@@ -19,9 +19,13 @@ export default function Todos({ externalAdd }: Props) {
   const { authenticated } = useAuth();
 
   useEffect(() => {
-    fetch("/api/data/todos")
-      .then((r) => r.json())
-      .then(({ todos: data }) => { if (data) setTodos(data); });
+    const load = () =>
+      fetch("/api/data/todos")
+        .then((r) => r.json())
+        .then(({ todos: data }) => { if (data) setTodos(data); });
+    load();
+    window.addEventListener("refreshData", load);
+    return () => window.removeEventListener("refreshData", load);
   }, []);
 
   // Listen for clearDoneTodos event from command palette

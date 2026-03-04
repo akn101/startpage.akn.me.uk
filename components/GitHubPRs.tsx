@@ -22,12 +22,18 @@ export default function GitHubPRs() {
   const [error, setError] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const load = () => {
     fetch("/api/integrations/github")
       .then((r) => r.json())
       .then((d) => { setPrs(d.prs ?? []); setLoading(false); })
       .catch(() => { setError(true); setLoading(false); });
-  }, []);
+  };
+
+  useEffect(() => {
+    load();
+    window.addEventListener("refreshData", load);
+    return () => window.removeEventListener("refreshData", load);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="feed-widget glass-sm">

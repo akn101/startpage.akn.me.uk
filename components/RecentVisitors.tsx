@@ -25,12 +25,19 @@ export default function RecentVisitors() {
   const [visitors, setVisitors] = useState<Visitor[]>([]);
   const { authenticated } = useAuth();
 
-  useEffect(() => {
-    if (!authenticated) return;
+  const load = () => {
     fetch("/api/visitors/recent")
       .then((r) => r.json())
-      .then(({ visitors: data }) => { if (data) setVisitors(data); })
+      .then(({ visitors: data }) => { if (Array.isArray(data)) setVisitors(data); })
       .catch(() => {});
+  };
+
+  useEffect(() => {
+    if (!authenticated) return;
+    load();
+    const id = setInterval(load, 30_000); // refresh every 30s to catch new captures
+    return () => clearInterval(id);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authenticated]);
 
   if (!authenticated) return null;
@@ -51,7 +58,9 @@ export default function RecentVisitors() {
                 <div className="visitor-thumb-placeholder">👤</div>
               )}
               <div className="visitor-info">
-                <span className="visitor-label">{v.face_label}</span>
+                <span className="visitor-label">
+                  {v.face_label === "motion" ? "🚪 motion" : `👤 ${v.face_label}`}
+                </span>
                 <span className="visitor-time">{timeAgo(v.captured_at)}</span>
               </div>
             </div>
