@@ -18,8 +18,11 @@ const NotionTasks    = dynamic(() => import("@/components/NotionTasks"),    { ss
 const CommandPalette = dynamic(() => import("@/components/CommandPalette"), { ssr: false });
 const Alarm          = dynamic(() => import("@/components/Alarm"),          { ssr: false });
 const PhotoSlideshow = dynamic(() => import("@/components/PhotoSlideshow"), { ssr: false });
-const CalendarWidget = dynamic(() => import("@/components/CalendarWidget"), { ssr: false });
-const MiniClock      = dynamic(() => import("@/components/MiniClock"),      { ssr: false });
+const CalendarWidget   = dynamic(() => import("@/components/CalendarWidget"),   { ssr: false });
+const ProjectTracker   = dynamic(() => import("@/components/ProjectTracker"),   { ssr: false });
+const CameraMonitor    = dynamic(() => import("@/components/CameraMonitor"),    { ssr: false });
+const RecentVisitors   = dynamic(() => import("@/components/RecentVisitors"),   { ssr: false });
+const MiniClock        = dynamic(() => import("@/components/MiniClock"),         { ssr: false });
 
 type DimLevel = 0 | 25 | 50 | 75 | 90;
 
@@ -123,14 +126,18 @@ export default function Page() {
           {/* Section 3: Feed tiles */}
           <section className="snap-section section-feed">
             <div className="feed-section">
+              <ProjectTracker />
               <GitHubPRs />
-              <NotionTasks />
               <CalendarWidget />
               <PhotoSlideshow />
+              <RecentVisitors />
             </div>
           </section>
 
         </div>
+
+        {/* ── Background camera monitor (auth-gated, invisible) ── */}
+        <CameraMonitor />
 
         {/* ── cmd+k palette ── */}
         <CommandPalette onAddTodo={handleAddTodo} />

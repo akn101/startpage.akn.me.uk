@@ -86,7 +86,7 @@ html, body, main {
   background: rgba(0, 0, 0, 0);
   transition: background 2s ease;
   pointer-events: none;
-  z-index: 5;
+  z-index: 20;
 }
 .dim-overlay.is-dim   { background: rgba(0, 0, 0, 0.58); }
 .dim-overlay.dim-25   { background: rgba(0, 0, 0, 0.25) !important; transition: background 0.4s; }
@@ -1081,8 +1081,70 @@ html, body, main {
   white-space: nowrap;
 }
 
+/* ─── Project Tracker ────────────────────────────────────── */
+.project-tracker { padding: 1.2rem; display: flex; flex-direction: column; gap: 0; }
+.project-list { display: flex; flex-direction: column; gap: 1rem; }
+.project-card {
+  padding: 0.75rem 0.9rem;
+  border-radius: 8px;
+  border-left: 3px solid var(--accent, #9678ff);
+  background: rgba(255,255,255,0.03);
+}
+.project-card-header { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.4rem; }
+.project-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.project-name {
+  font-size: 0.82rem; font-weight: 500; color: rgba(255,255,255,0.9);
+  text-decoration: none; flex: 1;
+}
+.project-name:hover { color: var(--accent, #9678ff); }
+.project-status-badge {
+  font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.08em;
+  color: rgba(255,255,255,0.35); padding: 0.1rem 0.4rem;
+  border: 1px solid rgba(255,255,255,0.1); border-radius: 4px;
+}
+.project-tasks { display: flex; flex-direction: column; gap: 0.2rem; margin-bottom: 0.3rem; }
+.todo-tasks { opacity: 0.6; }
+.task-item { display: flex; align-items: center; gap: 0.4rem; font-size: 0.75rem; color: rgba(255,255,255,0.75); }
+.task-item.in-progress .task-title { color: rgba(255,255,255,0.9); }
+.task-bullet { width: 4px; height: 4px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
+.task-title { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-decoration: none; color: inherit; }
+.task-title:hover { color: var(--accent, #9678ff); }
+.task-title.muted { color: rgba(255,255,255,0.5); }
+.task-deadline { font-size: 0.65rem; color: rgba(255,255,255,0.35); flex-shrink: 0; }
+.task-deadline.overdue { color: #f87171; }
+.task-more { font-size: 0.65rem; color: rgba(255,255,255,0.3); padding-left: 0.8rem; }
+.task-add-row { display: flex; gap: 0.4rem; margin-top: 0.3rem; }
+.task-add-input {
+  flex: 1; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 4px; padding: 0.25rem 0.5rem; font-size: 0.75rem; color: rgba(255,255,255,0.8);
+  font-family: inherit;
+}
+.task-add-btn {
+  background: rgba(150,120,255,0.2); border: none; border-radius: 4px;
+  padding: 0.25rem 0.5rem; color: rgba(150,120,255,0.9); cursor: pointer; font-size: 0.85rem;
+}
+.task-add-trigger {
+  font-size: 0.65rem; color: rgba(255,255,255,0.25); background: none; border: none;
+  cursor: pointer; text-align: left; padding: 0.2rem 0; margin-top: 0.1rem;
+}
+.task-add-trigger:hover { color: rgba(150,120,255,0.7); }
+.feed-hint { font-size: 0.65rem; color: rgba(255,255,255,0.3); margin-left: auto; }
+
 /* ─── Animations ─────────────────────────────────────────── */
 @keyframes slideUp {
   from { transform: translateY(0.75rem); opacity: 0; }
   to   { transform: translateY(0);       opacity: 1; }
 }
+
+/* ─── Recent Visitors widget ─────────────────────────────── */
+.visitors-widget { padding: 1.2rem; display: flex; flex-direction: column; gap: 0.6rem; }
+.visitors-list   { display: flex; flex-direction: column; gap: 0.5rem; }
+.visitor-item    { display: flex; align-items: center; gap: 0.6rem; }
+.visitor-thumb   { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; opacity: 0.85; }
+.visitor-thumb-placeholder { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.06); font-size: 1rem; }
+.visitor-info    { display: flex; flex-direction: column; gap: 0.1rem; }
+.visitor-label   { font-size: 0.75rem; color: rgba(255,255,255,0.8); }
+.visitor-time    { font-size: 0.65rem; color: rgba(255,255,255,0.35); }
+
+/* ─── Location retry button ──────────────────────────────── */
+.location-retry { background: none; border: none; cursor: pointer; font-size: 0.75rem; padding: 0 0.2rem; vertical-align: middle; }
