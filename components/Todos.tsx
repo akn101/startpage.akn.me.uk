@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useAuth } from "@/context/AuthContext";
 
 interface Todo {
@@ -49,6 +49,10 @@ export default function Todos({ externalAdd }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [externalAdd]);
 
+  const [adding, setAdding] = useState(false);
+  const [newText, setNewText] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+
   const toggle = useCallback((id: string) => {
     setTodos((prev) => {
       const next = prev.map((t) => (t.id === id ? { ...t, done: !t.done } : t));
@@ -58,25 +62,61 @@ export default function Todos({ externalAdd }: Props) {
     });
   }, []);
 
-  const visible = todos.slice(0, 6);
+  const addTodo = useCallback(() => {
+    const text = newText.trim();
+    if (!text) { setAdding(false); return; }
+    fetch("/api/data/todos", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }) })
+      .then((r) => r.json())
+      .then(({ todo }) => { if (todo) setTodos((prev) => [...prev, todo]); });
+    setNewText("");
+    setAdding(false);
+  }, [newText]);
+
+  useEffect(() => { if (adding) inputRef.current?.focus(); }, [adding]);
+
+  // Done todos sink to bottom
+  const sorted = [...todos.filter((t) => !t.done), ...todos.filter((t) => t.done)];
 
   return (
     <div className="todos-widget glass-sm">
-      <div className="todos-header">Todos</div>
-      {visible.length === 0 ? (
-        <div className="todos-empty">No tasks — add with ⌘K → /todo</div>
-      ) : (
-        visible.map((t) => (
-          <div
-            key={t.id}
-            className={`todo-item${t.done ? " done" : ""}${!authenticated ? " readonly" : ""}`}
-            onClick={() => authenticated && toggle(t.id)}
-          >
-            <div className="todo-check">{t.done ? "✓" : ""}</div>
-            <span>{t.text}</span>
+      <div className="todos-header">
+        Todos
+        {authenticated && (
+          <button type="button" className="todos-add-btn" onClick={() => setAdding(true)} title="Add todo">+</button>
+        )}
+      </div>
+      <div className="todos-list">
+        {sorted.length === 0 && !adding ? (
+          <div className="todos-empty">No tasks</div>
+        ) : (
+          sorted.map((t) => (
+            <div
+              key={t.id}
+              className={`todo-item${t.done ? " done" : ""}${!authenticated ? " readonly" : ""}`}
+              onClick={() => authenticated && toggle(t.id)}
+            >
+              <div className="todo-check">{t.done ? "✓" : ""}</div>
+              <span>{t.text}</span>
+            </div>
+          ))
+        )}
+        {adding && (
+          <div className="todo-add-row">
+            <input
+              ref={inputRef}
+              className="todo-add-input"
+              placeholder="New todo…"
+              value={newText}
+              onChange={(e) => setNewText(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") addTodo();
+                if (e.key === "Escape") { setAdding(false); setNewText(""); }
+              }}
+              onBlur={addTodo}
+            />
           </div>
-        ))
-      )}
+        )}
+      </div>
     </div>
   );
 }

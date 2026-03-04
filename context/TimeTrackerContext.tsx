@@ -46,15 +46,32 @@ export function fmtDuration(s: number) {
     : `${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
 }
 
+interface ProjectKeywords { name: string; keywords: string }
+
+/** Return best-matching project name for a timer label, or null */
+function matchProject(label: string, projects: ProjectKeywords[]): string | null {
+  const lc = label.toLowerCase();
+  for (const p of projects) {
+    const terms = [p.name, ...p.keywords.split(/[\s,]+/)].map((t) => t.toLowerCase()).filter(Boolean);
+    if (terms.some((t) => t.length > 2 && lc.includes(t))) return p.name;
+  }
+  return null;
+}
+
 export function TimeTrackerProvider({ children }: { children: ReactNode }) {
   const [timers, setTimers]     = useState<ActiveTimer[]>([]);
   const [sessions, setSessions] = useState<TrackerSession[]>([]);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const projectsRef = useRef<ProjectKeywords[]>([]);
 
   useEffect(() => {
     fetch("/api/data/sessions")
       .then((r) => r.json())
       .then(({ sessions: data }) => { if (data) setSessions(data); });
+    // Load project keywords for timer matching
+    fetch("/api/tasks")
+      .then((r) => r.json())
+      .then(({ projects }) => { if (projects) projectsRef.current = projects; });
   }, []);
 
   useEffect(() => {
@@ -75,6 +92,7 @@ export function TimeTrackerProvider({ children }: { children: ReactNode }) {
 
   const saveSession = useCallback((timer: ActiveTimer, endedAt: Date) => {
     const duration_s = Math.floor((endedAt.getTime() - timer.startedAt.getTime()) / 1000);
+    const project = matchProject(timer.label, projectsRef.current);
     fetch("/api/data/sessions", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -83,6 +101,7 @@ export function TimeTrackerProvider({ children }: { children: ReactNode }) {
         started_at: timer.startedAt.toISOString(),
         ended_at: endedAt.toISOString(),
         duration_s,
+        ...(project ? { project } : {}),
       }),
     })
       .then((r) => r.json())

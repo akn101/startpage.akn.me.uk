@@ -68,6 +68,8 @@ export async function GET() {
     name: getTitle(p.properties, "Name"),
     status: getSelect(p.properties, "Status"),
     color: getSelect(p.properties, "Color"),
+    category: getSelect(p.properties, "Category"),
+    keywords: getRichText(p.properties, "Keywords"),
     is_public: getCheckbox(p.properties, "is_public"),
     url: p.url,
   }));

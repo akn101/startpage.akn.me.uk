@@ -326,7 +326,24 @@ html, body, main {
   text-transform: uppercase;
   color: rgba(255,255,255,0.25);
   margin-bottom: 0.15rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
+.todos-add-btn {
+  background: none; border: none; color: rgba(255,255,255,0.4);
+  font-size: 1rem; cursor: pointer; padding: 0 0.2rem; line-height: 1;
+  transition: color 0.15s;
+}
+.todos-add-btn:hover { color: rgba(255,255,255,0.85); }
+.todos-list { display: flex; flex-direction: column; gap: 0.25rem; max-height: 240px; overflow-y: auto; }
+.todo-add-row { display: flex; align-items: center; }
+.todo-add-input {
+  background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 5px; color: #fff; font-size: 0.75rem; padding: 0.25rem 0.5rem;
+  width: 100%; outline: none;
+}
+.todo-add-input:focus { border-color: rgba(255,255,255,0.3); }
 
 .todo-item {
   display: flex;
@@ -1083,7 +1100,7 @@ html, body, main {
 
 /* ─── Project Tracker ────────────────────────────────────── */
 .project-tracker { padding: 1.2rem; display: flex; flex-direction: column; gap: 0; }
-.project-list { display: flex; flex-direction: column; gap: 1rem; }
+.project-list { display: flex; flex-direction: column; gap: 1rem; max-height: 420px; overflow-y: auto; }
 .project-card {
   padding: 0.75rem 0.9rem;
   border-radius: 8px;
@@ -1101,6 +1118,14 @@ html, body, main {
   font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.08em;
   color: rgba(255,255,255,0.35); padding: 0.1rem 0.4rem;
   border: 1px solid rgba(255,255,255,0.1); border-radius: 4px;
+}
+.project-category {
+  font-size: 0.58rem; text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--accent, #9678ff); opacity: 0.7; padding: 0.1rem 0.35rem;
+  border: 1px solid var(--accent, #9678ff); border-radius: 10px; opacity: 0.55;
+}
+.project-time {
+  font-size: 0.62rem; color: rgba(255,255,255,0.3); white-space: nowrap;
 }
 .project-tasks { display: flex; flex-direction: column; gap: 0.2rem; margin-bottom: 0.3rem; }
 .todo-tasks { opacity: 0.6; }
@@ -1138,7 +1163,7 @@ html, body, main {
 
 /* ─── Recent Visitors widget ─────────────────────────────── */
 .visitors-widget { padding: 1.2rem; display: flex; flex-direction: column; gap: 0.6rem; }
-.visitors-list   { display: flex; flex-direction: column; gap: 0.5rem; }
+.visitors-list   { display: flex; flex-direction: column; gap: 0.5rem; max-height: 240px; overflow-y: auto; }
 .visitor-item    { display: flex; align-items: center; gap: 0.6rem; }
 .visitor-thumb   { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; opacity: 0.85; }
 .visitor-thumb-placeholder { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.06); font-size: 1rem; }

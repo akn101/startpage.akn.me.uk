@@ -8,6 +8,7 @@ interface Project {
   name: string;
   status: string;
   color: string;
+  category: string;
   is_public: boolean;
   url: string;
 }
@@ -42,24 +43,34 @@ function fmtDeadline(deadline: string | null): string {
   return d.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 }
 
+// Time per project from sessions (seconds)
+type TimeMap = Record<string, number>;
+
 export default function ProjectTracker() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [tasks, setTasks]       = useState<Task[]>([]);
+  const [timeMap, setTimeMap]   = useState<TimeMap>({});
   const [loading, setLoading]   = useState(true);
-  const [addingTask, setAddingTask] = useState<string | null>(null); // project name
+  const [addingTask, setAddingTask] = useState<string | null>(null);
   const [newTask, setNewTask]       = useState("");
   const { authenticated } = useAuth();
 
   useEffect(() => {
     const load = () => {
-      fetch("/api/tasks")
-        .then((r) => r.json())
-        .then(({ projects: p, tasks: t }) => {
-          setProjects(p ?? []);
-          setTasks(t ?? []);
-          setLoading(false);
-        })
-        .catch(() => setLoading(false));
+      Promise.all([
+        fetch("/api/tasks").then((r) => r.json()),
+        fetch("/api/data/sessions").then((r) => r.json()),
+      ]).then(([{ projects: p, tasks: t }, { sessions: s }]) => {
+        setProjects(p ?? []);
+        setTasks(t ?? []);
+        // Aggregate time per project
+        const map: TimeMap = {};
+        for (const sess of (s ?? [])) {
+          if (sess.project) map[sess.project] = (map[sess.project] ?? 0) + sess.duration_s;
+        }
+        setTimeMap(map);
+        setLoading(false);
+      }).catch(() => setLoading(false));
     };
     load();
     window.addEventListener("refreshData", load);
@@ -102,22 +113,37 @@ export default function ProjectTracker() {
     );
   }
 
+  // Sort: least time logged first (needs most attention), then alphabetical
+  const sorted = [...projects].sort((a, b) => {
+    const ta = timeMap[a.name] ?? 0;
+    const tb = timeMap[b.name] ?? 0;
+    return ta !== tb ? ta - tb : a.name.localeCompare(b.name);
+  });
+
+  function fmtTime(s: number): string {
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    return h > 0 ? `${h}h ${m}m` : m > 0 ? `${m}m` : "";
+  }
+
   return (
     <div className="project-tracker glass-sm feed-widget">
       <div className="feed-widget-header">Projects</div>
       <div className="project-list">
-        {projects.map((proj) => {
+        {sorted.map((proj) => {
           const projTasks  = tasks.filter((t) => t.project === proj.name);
           const inProgress = projTasks.filter((t) => t.status === "In Progress");
           const todo       = projTasks.filter((t) => t.status === "Todo");
           const accent     = COLOR_MAP[proj.color] ?? COLOR_MAP.purple;
+          const timeLogged = timeMap[proj.name] ?? 0;
 
           return (
             <div key={proj.id} className="project-card" style={{ "--accent": accent } as React.CSSProperties}>
               <div className="project-card-header">
                 <span className="project-dot" style={{ background: accent }} />
                 <a href={proj.url} target="_blank" rel="noreferrer" className="project-name">{proj.name}</a>
-                <span className="project-status-badge">{proj.status}</span>
+                {proj.category && <span className="project-category">{proj.category}</span>}
+                {timeLogged > 0 && <span className="project-time">{fmtTime(timeLogged)}</span>}
               </div>
 
               {inProgress.length > 0 && (
