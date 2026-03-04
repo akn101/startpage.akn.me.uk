@@ -64,12 +64,41 @@ export default function Page() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [showMini, setShowMini] = useState(false);
 
-  // Auto-refresh all data components every 30 minutes
+  // Auto-refresh data every 30 min + reload on new deployment after 10 min idle
   useEffect(() => {
-    const id = setInterval(() => {
+    let deploymentId: string | null = null;
+    let lastActivity = Date.now();
+    const IDLE_MS = 10 * 60 * 1000;
+
+    // Track user activity
+    const onActivity = () => { lastActivity = Date.now(); };
+    ["mousemove", "keydown", "click", "scroll", "touchstart"].forEach((e) =>
+      window.addEventListener(e, onActivity, { passive: true })
+    );
+
+    // Fetch current deployment ID on mount
+    fetch("/api/version").then((r) => r.json()).then((d) => { deploymentId = d.id; });
+
+    const id = setInterval(async () => {
+      // Dispatch data refresh
       window.dispatchEvent(new CustomEvent("refreshData"));
+
+      // Check for new deployment
+      try {
+        const { id: latestId } = await fetch("/api/version").then((r) => r.json());
+        const idle = Date.now() - lastActivity > IDLE_MS;
+        if (deploymentId && latestId !== deploymentId && idle) {
+          window.location.reload();
+        }
+      } catch { /* ignore */ }
     }, 30 * 60 * 1000);
-    return () => clearInterval(id);
+
+    return () => {
+      clearInterval(id);
+      ["mousemove", "keydown", "click", "scroll", "touchstart"].forEach((e) =>
+        window.removeEventListener(e, onActivity)
+      );
+    };
   }, []);
 
   useEffect(() => {
