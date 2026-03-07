@@ -90,11 +90,15 @@ export default function GitHubWidget() {
       )}
       {!loading && !error && tab === "repos" && data.repos.map((repo) => (
         <a key={repo.url} href={repo.url} target="_blank" rel="noopener noreferrer" className="feed-item gh-item">
-          {repo.ci != null && (
-            <span className={`ci-dot ${CI_CLASS[repo.ci] ?? ""}`} title={repo.ci}>{CI_ICON[repo.ci]}</span>
-          )}
+          <span className={`ci-badge${repo.ci ? ` ci-badge-${repo.ci.toLowerCase()}` : " ci-badge-none"}`}>
+            {repo.ci ? CI_ICON[repo.ci] : "·"}
+          </span>
           <span className="gh-item-body">
-            <span className="feed-item-title">{repo.owner}/{repo.name}</span>
+            <span className="feed-item-title">
+              <span className="gh-repo-owner">{repo.owner}</span>
+              <span className="gh-repo-sep">/</span>
+              <span className="gh-repo-name">{repo.name}</span>
+            </span>
             <span className="feed-item-meta">{timeAgo(repo.pushedAt)}</span>
           </span>
         </a>

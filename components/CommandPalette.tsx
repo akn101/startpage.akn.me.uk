@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { Command } from "cmdk";
 import { quickLinks } from "@/lib/config";
 import { useTimeTracker, fmtDuration } from "@/context/TimeTrackerContext";
+import { useAuth } from "@/context/AuthContext";
 
 interface Props {
   onAddTodo: (text: string) => void;
@@ -21,6 +22,9 @@ export default function CommandPalette({ onAddTodo, cameraEnabled, onCameraToggl
   const [open, setOpen]   = useState(false);
   const [input, setInput] = useState("");
   const tracker = useTimeTracker();
+  const { authenticated } = useAuth();
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const suggestionsRef = useRef<string[]>([]);
 
   useEffect(() => {
     const keyHandler = (e: KeyboardEvent) => {
@@ -36,6 +40,21 @@ export default function CommandPalette({ onAddTodo, cameraEnabled, onCameraToggl
       setOpen(true);
       if (prefill) setInput(prefill);
     };
+    // Load search history when palette opens (auth-only)
+    if (authenticated && suggestionsRef.current.length === 0) {
+      fetch("/api/data/searches")
+        .then((r) => r.json())
+        .then(({ searches }) => {
+          if (!searches) return;
+          // Deduplicate, most recent first
+          const seen = new Set<string>();
+          const unique = (searches as { query: string }[])
+            .map((s) => s.query)
+            .filter((q) => { if (seen.has(q)) return false; seen.add(q); return true; });
+          suggestionsRef.current = unique;
+        })
+        .catch(() => {});
+    }
     document.addEventListener("keydown", keyHandler);
     window.addEventListener("openCommandPalette", paletteHandler);
     return () => {
@@ -44,7 +63,7 @@ export default function CommandPalette({ onAddTodo, cameraEnabled, onCameraToggl
     };
   }, []);
 
-  const close = useCallback(() => { setOpen(false); setInput(""); }, []);
+  const close = useCallback(() => { setOpen(false); setInput(""); setSuggestions([]); }, []);
 
   const isTodo   = input.toLowerCase().startsWith("/todo ");
   const todoText = input.replace(/^\/todo\s*/i, "").trim();
@@ -73,10 +92,25 @@ export default function CommandPalette({ onAddTodo, cameraEnabled, onCameraToggl
   const isCommand  = plainText.startsWith("/");
   const showGoogle = plainText.length > 0 && !isCommand;
 
-  const handleGoogle = useCallback(() => {
-    window.open(`https://www.google.com/search?q=${encodeURIComponent(plainText)}`, "_blank");
+  // Filter suggestions to match current input
+  useEffect(() => {
+    if (!plainText || isCommand) { setSuggestions([]); return; }
+    const lc = plainText.toLowerCase();
+    setSuggestions(
+      suggestionsRef.current.filter((q) => q.toLowerCase().includes(lc) && q !== plainText).slice(0, 5)
+    );
+  }, [plainText, isCommand]);
+
+  const handleGoogle = useCallback((query = plainText) => {
+    window.open(`https://www.google.com/search?q=${encodeURIComponent(query)}`, "_blank");
+    if (authenticated) {
+      fetch("/api/data/searches", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query }) })
+        .then(() => {
+          if (!suggestionsRef.current.includes(query)) suggestionsRef.current = [query, ...suggestionsRef.current].slice(0, 200);
+        }).catch(() => {});
+    }
     close();
-  }, [plainText, close]);
+  }, [plainText, authenticated, close]);
 
   const suppressFilter = isTodo || isRecord || isAlarm || isDim || isCamera;
 
@@ -91,7 +125,7 @@ export default function CommandPalette({ onAddTodo, cameraEnabled, onCameraToggl
           onValueChange={setInput}
           autoFocus
           onKeyDown={(e) => {
-            if (e.key === "Enter" && showGoogle) { e.preventDefault(); handleGoogle(); }
+            if (e.key === "Enter" && showGoogle) { e.preventDefault(); handleGoogle(plainText); }
           }}
         />
         <Command.List>
@@ -99,10 +133,16 @@ export default function CommandPalette({ onAddTodo, cameraEnabled, onCameraToggl
 
           {showGoogle && (
             <Command.Group heading="Web">
-              <Command.Item value={`google-${plainText}`} onSelect={handleGoogle}>
+              <Command.Item value={`google-${plainText}`} onSelect={() => handleGoogle(plainText)}>
                 <span className="cmdk-icon">⌕</span>
                 Search Google for &quot;{plainText}&quot;
               </Command.Item>
+              {suggestions.map((q) => (
+                <Command.Item key={q} value={`suggestion-${q}`} onSelect={() => handleGoogle(q)}>
+                  <span className="cmdk-icon">↺</span>
+                  {q}
+                </Command.Item>
+              ))}
             </Command.Group>
           )}
 

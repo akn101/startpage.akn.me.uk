@@ -1206,12 +1206,22 @@ html, body, main {
   background: rgba(255,255,255,0.1); border-radius: 10px;
   padding: 0 5px; font-size: 10px; line-height: 1.5;
 }
-.gh-item { display: flex; align-items: flex-start; gap: 6px; }
-.gh-item-body { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
-.ci-dot {
-  font-size: 10px; font-weight: 700; min-width: 14px;
-  text-align: center; flex-shrink: 0; margin-top: 2px;
+.gh-item { display: flex; align-items: center; gap: 8px; }
+.gh-item-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.gh-repo-owner { color: rgba(255,255,255,0.35); font-size: 0.68rem; }
+.gh-repo-sep   { color: rgba(255,255,255,0.2);  font-size: 0.68rem; }
+.gh-repo-name  { color: rgba(255,255,255,0.82); font-size: 0.72rem; font-weight: 500; }
+.ci-badge {
+  flex-shrink: 0; font-size: 9px; font-weight: 700;
+  width: 16px; height: 16px; border-radius: 4px;
+  display: flex; align-items: center; justify-content: center;
 }
+.ci-badge-success { background: rgba(74,222,128,0.15); color: #4ade80; }
+.ci-badge-failure,
+.ci-badge-error   { background: rgba(248,113,113,0.15); color: #f87171; }
+.ci-badge-pending { background: rgba(251,191,36,0.12);  color: #fbbf24; }
+.ci-badge-none    { background: rgba(255,255,255,0.05); color: rgba(255,255,255,0.2); }
+.ci-dot { font-size: 10px; font-weight: 700; min-width: 14px; text-align: center; flex-shrink: 0; }
 .ci-pass    { color: #4ade80; }
 .ci-fail    { color: #f87171; }
 .ci-pending { color: #fbbf24; }

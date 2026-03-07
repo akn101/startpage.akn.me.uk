@@ -29,11 +29,11 @@ type DimLevel = 0 | 25 | 50 | 75 | 90;
 
 function useDim() {
   const [autoDim, setAutoDim] = useState(false);
-  const [manualDim, setManualDim] = useState<DimLevel>(0);
+  const [manualDim, setManualDim] = useState<DimLevel | null>(null);
 
   useEffect(() => {
     const saved = localStorage.getItem("sp_dim");
-    if (saved) setManualDim(Number(saved) as DimLevel);
+    if (saved !== null) setManualDim(Number(saved) as DimLevel);
   }, []);
 
   useEffect(() => {
@@ -151,11 +151,11 @@ export default function Page() {
 
   const dimOverlayClass = [
     "dim-overlay",
-    autoDim && !manualDim ? "is-dim" : "",
-    manualDim ? `dim-${manualDim}` : "",
+    autoDim && manualDim === null ? "is-dim" : "",
+    manualDim != null && manualDim > 0 ? `dim-${manualDim}` : "",
   ].filter(Boolean).join(" ");
 
-  const screensaverClass = manualDim ? `screensaver-dim screensaver-dim-${manualDim}` : "";
+  const screensaverClass = manualDim != null && manualDim > 0 ? `screensaver-dim screensaver-dim-${manualDim}` : "";
 
   return (
     <TimeTrackerProvider>
