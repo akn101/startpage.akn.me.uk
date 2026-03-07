@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
+import { useTimeTracker } from "@/context/TimeTrackerContext";
 
 interface Assignment {
   id: string;
@@ -25,6 +26,13 @@ const STATUS_CLASS: Record<string, string> = {
   "Complete":    "assign-status-done",
 };
 
+function fmtEstimate(mins: number): string {
+  if (mins < 60) return `${mins}m`;
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return m > 0 ? `${h}h ${m}m` : `${h}h`;
+}
+
 function daysUntil(iso: string): number {
   return Math.ceil((new Date(iso).getTime() - Date.now()) / 86400000);
 }
@@ -36,6 +44,7 @@ export default function Assignments() {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [loading, setLoading] = useState(true);
   const { authenticated } = useAuth();
+  const { start } = useTimeTracker();
 
   const load = () => {
     fetch("/api/assignments")
@@ -90,7 +99,10 @@ export default function Assignments() {
                 {a.status || "?"}
               </button>
               <span className="assign-body">
-                <a href={a.url} target="_blank" rel="noreferrer" className="assign-title">{a.title}</a>
+                <span className="assign-title-row">
+                  <a href={a.url} target="_blank" rel="noreferrer" className="assign-title">{a.title}</a>
+                  <button type="button" className="assign-timer-btn" title="Start timer" onClick={() => start(`Eton – ${a.title}`)}>▶</button>
+                </span>
                 <span className="assign-meta">
                   {a.subject && <span className="assign-subject">{a.subject}</span>}
                   {a.due && (
@@ -102,7 +114,7 @@ export default function Assignments() {
                           : fmtDue(a.due)}
                     </span>
                   )}
-                  {a.duration != null && <span className="assign-duration">{a.duration}h</span>}
+                  {a.duration != null && <span className="assign-duration">{fmtEstimate(a.duration)}</span>}
                 </span>
               </span>
             </div>

@@ -1268,11 +1268,18 @@ html, body, main {
 .assign-status-submitted { background: rgba(91,158,246,0.2);   color: #93c5fd; }
 .assign-status-done      { background: rgba(74,222,128,0.15);  color: #86efac; }
 .assign-body  { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.assign-title-row { display: flex; align-items: center; gap: 4px; min-width: 0; }
 .assign-title {
   font-size: 0.78rem; color: rgba(255,255,255,0.82);
-  text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; min-width: 0;
 }
 .assign-title:hover { color: var(--accent, #9678ff); }
+.assign-timer-btn {
+  flex-shrink: 0; background: none; border: none; cursor: pointer;
+  font-size: 0.6rem; color: rgba(255,255,255,0.2); padding: 0 2px; line-height: 1;
+  transition: color 0.15s;
+}
+.assign-timer-btn:hover { color: #4ade80; }
 .assign-meta    { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .assign-subject {
   font-size: 0.62rem; color: rgba(255,255,255,0.35);
