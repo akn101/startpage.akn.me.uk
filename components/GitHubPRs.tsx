@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 type CIState = "SUCCESS" | "FAILURE" | "ERROR" | "PENDING" | null;
 
 interface Item { title: string; url: string; repo: string; owner: string; createdAt: string; ci?: CIState }
-interface Repo  { name: string; owner: string; url: string; pushedAt: string }
+interface Repo  { name: string; owner: string; url: string; pushedAt: string; ci?: CIState }
 interface GHData { prs: Item[]; reviews: Item[]; issues: Item[]; repos: Repo[] }
 
 const CI_ICON:  Record<string, string> = { SUCCESS: "✓", FAILURE: "✗", ERROR: "✗", PENDING: "●" };
@@ -90,6 +90,9 @@ export default function GitHubWidget() {
       )}
       {!loading && !error && tab === "repos" && data.repos.map((repo) => (
         <a key={repo.url} href={repo.url} target="_blank" rel="noopener noreferrer" className="feed-item gh-item">
+          {repo.ci != null && (
+            <span className={`ci-dot ${CI_CLASS[repo.ci] ?? ""}`} title={repo.ci}>{CI_ICON[repo.ci]}</span>
+          )}
           <span className="gh-item-body">
             <span className="feed-item-title">{repo.owner}/{repo.name}</span>
             <span className="feed-item-meta">{timeAgo(repo.pushedAt)}</span>

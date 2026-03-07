@@ -64,15 +64,48 @@ export async function GET() {
     }
   }`;
 
-  const [gql, eventsRes] = await Promise.all([
+  const reposQuery = `{
+    viewer {
+      repositoriesContributedTo(
+        first: 15
+        includeUserRepositories: true
+        contributionTypes: [COMMIT, PULL_REQUEST]
+        orderBy: { field: PUSHED_AT, direction: DESC }
+      ) {
+        nodes {
+          nameWithOwner
+          url
+          pushedAt
+          defaultBranchRef {
+            target {
+              ... on Commit {
+                statusCheckRollup { state }
+              }
+            }
+          }
+        }
+      }
+    }
+  }`;
+
+  const [gql, reposGql] = await Promise.all([
     graphql<{
       myPRs:   { nodes: GQLPRNode[] };
       reviews: { nodes: GQLPRNode[] };
       issues:  { nodes: GQLIssueNode[] };
     }>(query),
-    fetch(`https://api.github.com/users/${GH_USER}/events?per_page=50`, {
-      headers: { Authorization: `Bearer ${GH_TOKEN}`, "X-GitHub-Api-Version": "2022-11-28" },
-    }),
+    graphql<{
+      viewer: {
+        repositoriesContributedTo: {
+          nodes: {
+            nameWithOwner: string;
+            url: string;
+            pushedAt: string;
+            defaultBranchRef: { target: { statusCheckRollup: { state: string } | null } | null } | null;
+          }[];
+        };
+      };
+    }>(reposQuery),
   ]);
 
   const prs = (gql?.myPRs?.nodes ?? []).map((n) => ({
@@ -102,19 +135,11 @@ export async function GET() {
     ci: null as CIState,
   }));
 
-  let repos: { name: string; owner: string; url: string; pushedAt: string }[] = [];
-  if (eventsRes.ok) {
-    const events: { type: string; repo: { name: string }; created_at: string }[] = await eventsRes.json();
-    const seen = new Set<string>();
-    for (const ev of events) {
-      if (ev.type === "PushEvent" && ev.repo && !seen.has(ev.repo.name)) {
-        seen.add(ev.repo.name);
-        const [owner, name] = ev.repo.name.split("/");
-        repos.push({ name, owner, url: `https://github.com/${ev.repo.name}`, pushedAt: ev.created_at });
-        if (repos.length >= 6) break;
-      }
-    }
-  }
+  const repos = (reposGql?.viewer?.repositoriesContributedTo?.nodes ?? []).map((r) => {
+    const [owner, name] = r.nameWithOwner.split("/");
+    const ci = (r.defaultBranchRef?.target?.statusCheckRollup?.state ?? null) as CIState;
+    return { name, owner, url: r.url, pushedAt: r.pushedAt, ci };
+  });
 
   return Response.json({ prs, reviews, issues, repos });
 }
