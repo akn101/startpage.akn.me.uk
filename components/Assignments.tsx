@@ -13,18 +13,16 @@ interface Assignment {
   duration: number | null;
 }
 
-// Cycle: Not started → In progress → Submitted → Done
+// Cycle: Not Started → In Progress → Complete
 const STATUS_NEXT: Record<string, string> = {
-  "Not started": "In progress",
-  "In progress": "Submitted",
-  "Submitted":   "Done",
-  "Done":        "Not started",
+  "Not Started": "In Progress",
+  "In Progress": "Complete",
+  "Complete":    "Not Started",
 };
 const STATUS_CLASS: Record<string, string> = {
-  "Not started": "assign-status-todo",
-  "In progress": "assign-status-progress",
-  "Submitted":   "assign-status-submitted",
-  "Done":        "assign-status-done",
+  "Not Started": "assign-status-todo",
+  "In Progress": "assign-status-progress",
+  "Complete":    "assign-status-done",
 };
 
 function daysUntil(iso: string): number {
@@ -54,9 +52,9 @@ export default function Assignments() {
 
   const cycleStatus = async (id: string, current: string) => {
     if (!authenticated) return;
-    const next = STATUS_NEXT[current] ?? "In progress";
+    const next = STATUS_NEXT[current] ?? "In Progress";
     setAssignments((prev) => prev.map((a) => a.id === id ? { ...a, status: next } : a));
-    if (next === "Done" || next === "Submitted") {
+    if (next === "Complete") {
       setTimeout(() => setAssignments((prev) => prev.filter((a) => a.id !== id)), 1200);
     }
     await fetch("/api/assignments", {

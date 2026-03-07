@@ -51,7 +51,14 @@ export async function GET() {
     method: "POST",
     headers: notionHeaders(),
     body: JSON.stringify({
-      sorts: [{ property: "Due", direction: "ascending" }],
+      filter: {
+        and: [
+          { property: "My Status", status: { does_not_equal: "Archived" } },
+          { property: "dueDate", date: { on_or_after: new Date(Date.now() - 90 * 86400000).toISOString() } },
+          { property: "dueDate", date: { on_or_before: new Date(Date.now() + 90 * 86400000).toISOString() } },
+        ],
+      },
+      sorts: [{ property: "dueDate", direction: "ascending" }],
     }),
     cache: "no-store",
   });
@@ -63,13 +70,13 @@ export async function GET() {
     .map((page: { id: string; url: string; properties: Record<string, unknown> }) => ({
       id: page.id,
       url: page.url,
-      title:    getTitle(page.properties, "Name", "Title", "Assignment"),
+      title:    getTitle(page.properties, "Title", "Name", "Assignment"),
       status:   getSelect(page.properties, "My Status", "Status"),
-      due:      getDate(page.properties, "Due", "Deadline", "Due Date"),
-      subject:  getSelect(page.properties, "Subject", "Class", "Course"),
-      duration: getNumber(page.properties, "Duration", "Time (hours)", "Hours"),
+      due:      getDate(page.properties, "dueDate", "Due", "Deadline", "Due Date"),
+      subject:  getSelect(page.properties, "classCode", "Subject", "Class", "Course"),
+      duration: getNumber(page.properties, "Time Estimate", "Duration", "Time (hours)", "Hours"),
     }))
-    .filter((a: { status: string }) => !["Done", "Submitted"].includes(a.status));
+    .filter((a: { status: string }) => !["Complete", "Marked"].includes(a.status));
 
   return Response.json({ assignments });
 }
@@ -84,7 +91,7 @@ export async function PATCH(req: Request) {
     headers: notionHeaders(),
     body: JSON.stringify({
       properties: {
-        "My Status": { select: { name: status } },
+        "My Status": { status: { name: status } },
       },
     }),
     cache: "no-store",

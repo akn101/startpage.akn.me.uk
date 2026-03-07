@@ -35,7 +35,7 @@ export async function GET() {
   if (!GH_TOKEN) return Response.json({ prs: [], reviews: [], issues: [], repos: [] });
 
   const query = `{
-    myPRs: search(query: "is:pr is:open author:${GH_USER}", type: ISSUE, first: 8) {
+    myPRs: search(query: "is:pr is:open author:${GH_USER} org:auracarehq org:akn101", type: ISSUE, first: 8) {
       nodes {
         ... on PullRequest {
           title url createdAt
@@ -46,7 +46,7 @@ export async function GET() {
         }
       }
     }
-    reviews: search(query: "is:pr is:open review-requested:${GH_USER}", type: ISSUE, first: 5) {
+    reviews: search(query: "is:pr is:open review-requested:${GH_USER} org:auracarehq org:akn101", type: ISSUE, first: 5) {
       nodes {
         ... on PullRequest {
           title url createdAt
@@ -54,7 +54,7 @@ export async function GET() {
         }
       }
     }
-    issues: search(query: "is:issue is:open assignee:${GH_USER}", type: ISSUE, first: 8) {
+    issues: search(query: "is:issue is:open assignee:${GH_USER} org:auracarehq org:akn101", type: ISSUE, first: 8) {
       nodes {
         ... on Issue {
           title url createdAt
