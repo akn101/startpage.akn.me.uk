@@ -6,6 +6,14 @@ import { quickLinks } from "@/lib/config";
 import { useTimeTracker, fmtDuration } from "@/context/TimeTrackerContext";
 import { useAuth } from "@/context/AuthContext";
 
+function normalizeURL(input: string): string | null {
+  const s = input.trim();
+  if (!s || s.includes(" ")) return null;
+  if (/^https?:\/\//i.test(s)) return s;
+  if (/^[a-zA-Z0-9-]+(\.[a-zA-Z]{2,})(\/|$)/.test(s)) return `https://${s}`;
+  return null;
+}
+
 interface Props {
   onAddTodo: (text: string) => void;
   cameraEnabled: boolean;
@@ -88,9 +96,10 @@ export default function CommandPalette({ onAddTodo, cameraEnabled, onCameraToggl
 
   const isCamera = input.toLowerCase().startsWith("/camera");
 
-  const plainText  = input.trim();
-  const isCommand  = plainText.startsWith("/");
-  const showGoogle = plainText.length > 0 && !isCommand;
+  const plainText   = input.trim();
+  const isCommand   = plainText.startsWith("/");
+  const detectedURL = !isCommand ? normalizeURL(plainText) : null;
+  const showGoogle  = plainText.length > 0 && !isCommand;
 
   // Filter suggestions to match current input
   useEffect(() => {
@@ -101,16 +110,27 @@ export default function CommandPalette({ onAddTodo, cameraEnabled, onCameraToggl
     );
   }, [plainText, isCommand]);
 
-  const handleGoogle = useCallback((query = plainText) => {
-    window.open(`https://www.google.com/search?q=${encodeURIComponent(query)}`, "_blank");
-    if (authenticated) {
-      fetch("/api/data/searches", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query }) })
-        .then(() => {
-          if (!suggestionsRef.current.includes(query)) suggestionsRef.current = [query, ...suggestionsRef.current].slice(0, 200);
-        }).catch(() => {});
-    }
+  const recordQuery = useCallback((query: string) => {
+    if (!authenticated) return;
+    fetch("/api/data/searches", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query }) })
+      .then(() => {
+        if (!suggestionsRef.current.includes(query)) suggestionsRef.current = [query, ...suggestionsRef.current].slice(0, 200);
+      }).catch(() => {});
+  }, [authenticated]);
+
+  const handleNavigate = useCallback((url: string, query: string) => {
+    window.open(url, "_blank");
+    recordQuery(query);
     close();
-  }, [plainText, authenticated, close]);
+  }, [recordQuery, close]);
+
+  const handleGoogle = useCallback((query = plainText) => {
+    const url = normalizeURL(query);
+    if (url) { handleNavigate(url, query); return; }
+    window.open(`https://www.google.com/search?q=${encodeURIComponent(query)}`, "_blank");
+    recordQuery(query);
+    close();
+  }, [plainText, handleNavigate, recordQuery, close]);
 
   const suppressFilter = isTodo || isRecord || isAlarm || isDim || isCamera;
 
@@ -125,7 +145,11 @@ export default function CommandPalette({ onAddTodo, cameraEnabled, onCameraToggl
           onValueChange={setInput}
           autoFocus
           onKeyDown={(e) => {
-            if (e.key === "Enter" && showGoogle) { e.preventDefault(); handleGoogle(plainText); }
+            if (e.key === "Enter" && showGoogle) {
+              e.preventDefault();
+              if (detectedURL) handleNavigate(detectedURL, plainText);
+              else handleGoogle(plainText);
+            }
           }}
         />
         <Command.List>
@@ -133,16 +157,26 @@ export default function CommandPalette({ onAddTodo, cameraEnabled, onCameraToggl
 
           {showGoogle && (
             <Command.Group heading="Web">
-              <Command.Item value={`google-${plainText}`} onSelect={() => handleGoogle(plainText)}>
-                <span className="cmdk-icon">⌕</span>
-                Search Google for &quot;{plainText}&quot;
-              </Command.Item>
-              {suggestions.map((q) => (
-                <Command.Item key={q} value={`suggestion-${q}`} onSelect={() => handleGoogle(q)}>
-                  <span className="cmdk-icon">↺</span>
-                  {q}
+              {detectedURL ? (
+                <Command.Item value={`goto-${plainText}`} onSelect={() => handleNavigate(detectedURL, plainText)}>
+                  <span className="cmdk-icon">↗</span>
+                  Go to {plainText}
                 </Command.Item>
-              ))}
+              ) : (
+                <Command.Item value={`google-${plainText}`} onSelect={() => handleGoogle(plainText)}>
+                  <span className="cmdk-icon">⌕</span>
+                  Search Google for &quot;{plainText}&quot;
+                </Command.Item>
+              )}
+              {suggestions.map((q) => {
+                const qURL = normalizeURL(q);
+                return (
+                  <Command.Item key={q} value={`suggestion-${q}`} onSelect={() => qURL ? handleNavigate(qURL, q) : handleGoogle(q)}>
+                    <span className="cmdk-icon">{qURL ? "↗" : "↺"}</span>
+                    {q}
+                  </Command.Item>
+                );
+              })}
             </Command.Group>
           )}
 

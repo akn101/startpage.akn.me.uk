@@ -149,7 +149,7 @@ export async function GET() {
   }
   const repos = [...repoMap.values()]
     .sort((a, b) => b.pushedAt.localeCompare(a.pushedAt))
-    .slice(0, 20)
+    .slice(0, 6)
     .map((r) => {
       const [owner, name] = r.nameWithOwner.split("/");
       const ci = (r.defaultBranchRef?.target?.statusCheckRollup?.state ?? null) as CIState;
