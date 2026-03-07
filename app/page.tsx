@@ -31,7 +31,6 @@ function useDim() {
   const [manualDim, setManualDim] = useState<DimLevel>(0);
 
   useEffect(() => {
-    // Restore manual dim from localStorage
     const saved = localStorage.getItem("sp_dim");
     if (saved) setManualDim(Number(saved) as DimLevel);
   }, []);
@@ -43,7 +42,6 @@ function useDim() {
     return () => clearInterval(id);
   }, []);
 
-  // Listen for dim events from CommandPalette
   useEffect(() => {
     const handler = (e: Event) => {
       const level = (e as CustomEvent<DimLevel>).detail;
@@ -64,41 +62,77 @@ export default function Page() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [showMini, setShowMini] = useState(false);
 
+  // Camera enabled state — persisted to localStorage
+  const [cameraEnabled, setCameraEnabled] = useState(true);
+  useEffect(() => {
+    const saved = localStorage.getItem("sp_camera");
+    if (saved === "off") setCameraEnabled(false);
+  }, []);
+
+  const handleCameraToggle = useCallback(() => {
+    setCameraEnabled((prev) => {
+      const next = !prev;
+      localStorage.setItem("sp_camera", next ? "on" : "off");
+      return next;
+    });
+  }, []);
+
+  // Shared activity tracker (used by idle-scroll and deployment-reload)
+  const lastActivityRef = useRef(Date.now());
+  useEffect(() => {
+    const onActivity = () => { lastActivityRef.current = Date.now(); };
+    const events = ["mousemove", "keydown", "click", "scroll", "touchstart"] as const;
+    events.forEach((ev) => window.addEventListener(ev, onActivity, { passive: true }));
+    return () => events.forEach((ev) => window.removeEventListener(ev, onActivity));
+  }, []);
+
   // Auto-refresh data every 30 min + reload on new deployment after 10 min idle
   useEffect(() => {
     let deploymentId: string | null = null;
-    let lastActivity = Date.now();
     const IDLE_MS = 10 * 60 * 1000;
 
-    // Track user activity
-    const onActivity = () => { lastActivity = Date.now(); };
-    ["mousemove", "keydown", "click", "scroll", "touchstart"].forEach((e) =>
-      window.addEventListener(e, onActivity, { passive: true })
-    );
-
-    // Fetch current deployment ID on mount
     fetch("/api/version").then((r) => r.json()).then((d) => { deploymentId = d.id; });
 
     const id = setInterval(async () => {
-      // Dispatch data refresh
       window.dispatchEvent(new CustomEvent("refreshData"));
-
-      // Check for new deployment
       try {
         const { id: latestId } = await fetch("/api/version").then((r) => r.json());
-        const idle = Date.now() - lastActivity > IDLE_MS;
+        const idle = Date.now() - lastActivityRef.current > IDLE_MS;
         if (deploymentId && latestId !== deploymentId && idle) {
           window.location.reload();
         }
       } catch { /* ignore */ }
     }, 30 * 60 * 1000);
 
-    return () => {
-      clearInterval(id);
-      ["mousemove", "keydown", "click", "scroll", "touchstart"].forEach((e) =>
-        window.removeEventListener(e, onActivity)
-      );
+    return () => clearInterval(id);
+  }, []);
+
+  // Idle scroll-home: after 1 min of no activity, snap back to section 1
+  useEffect(() => {
+    const id = setInterval(() => {
+      const idle = Date.now() - lastActivityRef.current > 60_000;
+      if (idle && scrollRef.current && scrollRef.current.scrollTop > 0) {
+        scrollRef.current.scrollTo({ top: 0, behavior: "smooth" });
+      }
+    }, 5_000);
+    return () => clearInterval(id);
+  }, []);
+
+  // Global keydown: any printable character opens cmd+k prefilled with that char
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const tag     = (document.activeElement as HTMLElement)?.tagName ?? "";
+      const inInput = ["INPUT", "TEXTAREA"].includes(tag);
+      if (inInput || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key.length === 1) {
+        e.preventDefault();
+        window.dispatchEvent(
+          new CustomEvent("openCommandPalette", { detail: { prefill: e.key } })
+        );
+      }
     };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
   }, []);
 
   useEffect(() => {
@@ -174,10 +208,14 @@ export default function Page() {
         </div>
 
         {/* ── Background camera monitor (auth-gated, invisible) ── */}
-        <CameraMonitor />
+        <CameraMonitor enabled={cameraEnabled} />
 
         {/* ── cmd+k palette ── */}
-        <CommandPalette onAddTodo={handleAddTodo} />
+        <CommandPalette
+          onAddTodo={handleAddTodo}
+          cameraEnabled={cameraEnabled}
+          onCameraToggle={handleCameraToggle}
+        />
 
         {/* ── Android FAB ── */}
         <button
@@ -193,7 +231,7 @@ export default function Page() {
         <NotificationToast toasts={toasts} onDismiss={dismiss} />
 
         {/* ── Keyboard hint ── */}
-        <div className="kbd-hint">⌘K · /record · /alarm · /dim</div>
+        <div className="kbd-hint">⌘K · /record · /alarm · /dim · /camera</div>
       </main>
     </TimeTrackerProvider>
   );

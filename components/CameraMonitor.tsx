@@ -64,7 +64,7 @@ function saveDescriptor(label: string, descriptor: Float32Array) {
   localStorage.setItem(DESCRIPTORS_KEY, JSON.stringify(serialised));
 }
 
-export default function CameraMonitor() {
+export default function CameraMonitor({ enabled = true }: { enabled?: boolean }) {
   const { authenticated } = useAuth();
   const videoRef     = useRef<HTMLVideoElement>(null);
   const canvasRef    = useRef<HTMLCanvasElement>(null);
@@ -74,7 +74,7 @@ export default function CameraMonitor() {
   const lastCapture  = useRef(0);
 
   useEffect(() => {
-    if (!authenticated) return;
+    if (!authenticated || !enabled) return;
 
     let pollId: ReturnType<typeof setInterval>;
 
@@ -171,7 +171,7 @@ export default function CameraMonitor() {
       streamRef.current?.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
     };
-  }, [authenticated]);
+  }, [authenticated, enabled]);
 
   return (
     <>

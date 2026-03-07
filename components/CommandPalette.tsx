@@ -7,6 +7,8 @@ import { useTimeTracker, fmtDuration } from "@/context/TimeTrackerContext";
 
 interface Props {
   onAddTodo: (text: string) => void;
+  cameraEnabled: boolean;
+  onCameraToggle: () => void;
 }
 
 function parseAlarmCommand(input: string): { time: string; label: string } | null {
@@ -15,33 +17,32 @@ function parseAlarmCommand(input: string): { time: string; label: string } | nul
   return { time: m[1].padStart(5, "0"), label: (m[2] ?? "").trim() };
 }
 
-export default function CommandPalette({ onAddTodo }: Props) {
+export default function CommandPalette({ onAddTodo, cameraEnabled, onCameraToggle }: Props) {
   const [open, setOpen]   = useState(false);
   const [input, setInput] = useState("");
   const tracker = useTimeTracker();
 
   useEffect(() => {
     const keyHandler = (e: KeyboardEvent) => {
-      const tag     = (document.activeElement as HTMLElement)?.tagName ?? "";
-      const inInput = ["INPUT", "TEXTAREA"].includes(tag);
       if ((e.metaKey || e.ctrlKey) && e.key === "k") {
         e.preventDefault();
         setOpen((v) => !v);
       }
-      if (e.key === "/" && !inInput && !open) {
-        e.preventDefault();
-        setOpen(true);
-      }
       if (e.key === "Escape") setOpen(false);
     };
-    const fabHandler = () => setOpen(true);
+    // openCommandPalette event: supports optional prefill from detail
+    const paletteHandler = (e: Event) => {
+      const prefill = (e as CustomEvent<{ prefill?: string }>).detail?.prefill;
+      setOpen(true);
+      if (prefill) setInput(prefill);
+    };
     document.addEventListener("keydown", keyHandler);
-    window.addEventListener("openCommandPalette", fabHandler);
+    window.addEventListener("openCommandPalette", paletteHandler);
     return () => {
       document.removeEventListener("keydown", keyHandler);
-      window.removeEventListener("openCommandPalette", fabHandler);
+      window.removeEventListener("openCommandPalette", paletteHandler);
     };
-  }, [open]);
+  }, []);
 
   const close = useCallback(() => { setOpen(false); setInput(""); }, []);
 
@@ -66,6 +67,8 @@ export default function CommandPalette({ onAddTodo }: Props) {
     { label: "90%",  value: 90 },
   ];
 
+  const isCamera = input.toLowerCase().startsWith("/camera");
+
   const plainText  = input.trim();
   const isCommand  = plainText.startsWith("/");
   const showGoogle = plainText.length > 0 && !isCommand;
@@ -75,7 +78,7 @@ export default function CommandPalette({ onAddTodo }: Props) {
     close();
   }, [plainText, close]);
 
-  const suppressFilter = isTodo || isRecord || isAlarm || isDim;
+  const suppressFilter = isTodo || isRecord || isAlarm || isDim || isCamera;
 
   if (!open) return null;
 
@@ -83,7 +86,7 @@ export default function CommandPalette({ onAddTodo }: Props) {
     <div className="cmdk-overlay" onClick={(e) => { if (e.target === e.currentTarget) close(); }}>
       <Command className="cmdk-dialog" shouldFilter={!suppressFilter} loop>
         <Command.Input
-          placeholder="Search Google, or /todo · /record · /alarm HH:MM…"
+          placeholder="Search Google, or /todo · /record · /alarm · /camera…"
           value={input}
           onValueChange={setInput}
           autoFocus
@@ -114,14 +117,12 @@ export default function CommandPalette({ onAddTodo }: Props) {
 
           {isRecord && (
             <Command.Group heading="Timer">
-              {/* Start new timer (always available when text given) */}
               {recordText && (
                 <Command.Item value="record-start" onSelect={() => { tracker.start(recordText); close(); }}>
                   <span className="cmdk-icon">▶</span>
                   Start &quot;{recordText}&quot;{tracker.running ? " (alongside current)" : ""}
                 </Command.Item>
               )}
-              {/* Stop individual running timers */}
               {tracker.timers.map((t) => (
                 <Command.Item key={t.id} value={`stop-${t.id}`} onSelect={() => { tracker.stop(t.id); close(); }}>
                   <span className="cmdk-icon">⏹</span>
@@ -176,7 +177,16 @@ export default function CommandPalette({ onAddTodo }: Props) {
             </Command.Group>
           )}
 
-          {!isTodo && !isRecord && !isAlarm && !isDim && (
+          {isCamera && (
+            <Command.Group heading="Camera">
+              <Command.Item value="camera-toggle" onSelect={() => { onCameraToggle(); close(); }}>
+                <span className="cmdk-icon">📷</span>
+                {cameraEnabled ? "Disable camera monitoring" : "Enable camera monitoring"}
+              </Command.Item>
+            </Command.Group>
+          )}
+
+          {!isTodo && !isRecord && !isAlarm && !isDim && !isCamera && (
             <Command.Group heading="Go to">
               {quickLinks.map((link) => (
                 <Command.Item
@@ -192,7 +202,7 @@ export default function CommandPalette({ onAddTodo }: Props) {
             </Command.Group>
           )}
 
-          {!isTodo && !isRecord && !isAlarm && !isDim && (
+          {!isTodo && !isRecord && !isAlarm && !isDim && !isCamera && (
             <Command.Group heading="Actions">
               <Command.Item value="add todo" onSelect={() => setInput("/todo ")}>
                 <span className="cmdk-icon">＋</span>
@@ -213,6 +223,11 @@ export default function CommandPalette({ onAddTodo }: Props) {
                 <span className="cmdk-icon">🌙</span>
                 Dim screen
                 <span className="cmdk-shortcut">/dim</span>
+              </Command.Item>
+              <Command.Item value="toggle camera" onSelect={() => { onCameraToggle(); close(); }}>
+                <span className="cmdk-icon">📷</span>
+                {cameraEnabled ? "Disable camera" : "Enable camera"}
+                <span className="cmdk-shortcut">/camera</span>
               </Command.Item>
               <Command.Item value="clear done" onSelect={() => {
                 window.dispatchEvent(new CustomEvent("clearDoneTodos")); close();
