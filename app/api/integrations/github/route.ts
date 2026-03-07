@@ -1,4 +1,4 @@
-export const revalidate = 300; // ISR: cache route for 5 min
+export const dynamic = "force-dynamic";
 
 const GH_TOKEN = process.env.GITHUB_TOKEN!;
 const GH_USER  = "akn101";
@@ -140,7 +140,7 @@ export async function GET() {
   const repoNodes: GQLRepoNode[] = [
     ...(reposGql?.viewer?.repositoriesContributedTo?.nodes ?? []),
     ...(reposGql?.org?.repositories?.nodes ?? []),
-  ];
+  ].filter(Boolean) as GQLRepoNode[];
   // Deduplicate by URL, keep latest pushedAt, sort descending
   const repoMap = new Map<string, GQLRepoNode>();
   for (const r of repoNodes) {
