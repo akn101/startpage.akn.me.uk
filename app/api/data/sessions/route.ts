@@ -4,7 +4,7 @@ import { isAuthenticated, requireAuth } from "@/lib/auth";
 export async function GET() {
   const authed = isAuthenticated();
   let query = db.from("time_sessions")
-    .select("id, label, duration_s, project, is_public")
+    .select("id, label, duration_s, project, is_public, started_at")
     .order("created_at", { ascending: false })
     .limit(200);
   if (!authed) query = query.eq("is_public", true);

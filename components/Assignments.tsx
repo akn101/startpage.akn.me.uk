@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
-import { useTimeTracker } from "@/context/TimeTrackerContext";
+
 
 interface Assignment {
   id: string;
@@ -44,7 +44,6 @@ export default function Assignments() {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [loading, setLoading] = useState(true);
   const { authenticated } = useAuth();
-  const { start } = useTimeTracker();
 
   const load = () => {
     fetch("/api/assignments")
@@ -99,10 +98,7 @@ export default function Assignments() {
                 {a.status || "?"}
               </button>
               <span className="assign-body">
-                <span className="assign-title-row">
-                  <a href={a.url} target="_blank" rel="noreferrer" className="assign-title">{a.title}</a>
-                  <button type="button" className="assign-timer-btn" title="Start timer" onClick={() => start(`Eton – ${a.title}`)}>▶</button>
-                </span>
+                <a href={a.url} target="_blank" rel="noreferrer" className="assign-title">{a.title}</a>
                 <span className="assign-meta">
                   {a.subject && <span className="assign-subject">{a.subject}</span>}
                   {a.due && (

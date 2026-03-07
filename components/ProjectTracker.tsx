@@ -87,9 +87,14 @@ export default function ProjectTracker() {
       ]).then(([{ projects: p, tasks: t }, { sessions: s }]) => {
         setProjects(p ?? []);
         setTasks(t ?? []);
+        const weekStart = new Date();
+        weekStart.setDate(weekStart.getDate() - ((weekStart.getDay() + 6) % 7));
+        weekStart.setHours(0, 0, 0, 0);
         const map: TimeMap = {};
         for (const sess of (s ?? [])) {
-          if (sess.project) map[sess.project] = (map[sess.project] ?? 0) + sess.duration_s;
+          if (sess.project && sess.started_at && new Date(sess.started_at) >= weekStart) {
+            map[sess.project] = (map[sess.project] ?? 0) + sess.duration_s;
+          }
         }
         setTimeMap(map);
         setLoading(false);
@@ -208,7 +213,7 @@ export default function ProjectTracker() {
                 <span className="project-dot" style={{ background: accent }} />
                 <a href={proj.url} target="_blank" rel="noreferrer" className="project-name">{proj.name}</a>
                 {proj.category && <span className="project-category">{proj.category}</span>}
-                {timeLogged > 0 && <span className="project-time">{fmtTime(timeLogged)}</span>}
+                {timeLogged > 0 && <span className="project-time" title="This week">{fmtTime(timeLogged)}</span>}
               </div>
 
               {inProgress.length > 0 && (
