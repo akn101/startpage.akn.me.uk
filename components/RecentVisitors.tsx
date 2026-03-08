@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
+import { getClipsNear } from "@/lib/clip-store";
 
 interface Visitor {
   id: string;
@@ -21,6 +22,95 @@ function timeAgo(dateStr: string): string {
   return `${day}d ago`;
 }
 
+function VisitorCard({ visitor }: { visitor: Visitor }) {
+  const [clipUrl, setClipUrl]   = useState<string | null>(null);
+  const [loading, setLoading]   = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  const objectUrlRef            = useRef<string | null>(null);
+
+  async function toggle() {
+    if (expanded) {
+      setExpanded(false);
+      return;
+    }
+
+    if (clipUrl) {
+      setExpanded(true);
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const ts    = new Date(visitor.captured_at).getTime();
+      const clips = await getClipsNear(ts);
+      if (clips.length > 0) {
+        // Pick closest clip
+        const best = clips.reduce((a, b) =>
+          Math.abs(a.timestamp - ts) < Math.abs(b.timestamp - ts) ? a : b
+        );
+        const url = URL.createObjectURL(best.blob);
+        objectUrlRef.current = url;
+        setClipUrl(url);
+        setExpanded(true);
+      } else {
+        setExpanded(true); // expand to show "no clip" message
+      }
+    } catch {
+      setExpanded(true);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // Revoke object URL when card is hidden or unmounted
+  useEffect(() => {
+    return () => {
+      if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current);
+    };
+  }, []);
+
+  return (
+    <div className={`visitor-item${expanded ? " expanded" : ""}`} onClick={toggle}>
+      {visitor.imageUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={visitor.imageUrl} alt="" className="visitor-thumb" />
+      ) : (
+        <div className="visitor-thumb-placeholder">👤</div>
+      )}
+      <div className="visitor-info">
+        <span className="visitor-label">
+          {visitor.face_label === "motion" ? "🚪 motion" : `👤 ${visitor.face_label}`}
+        </span>
+        <span className="visitor-time">{timeAgo(visitor.captured_at)}</span>
+      </div>
+      {loading && <span className="visitor-clip-loading">…</span>}
+      {!loading && !clipUrl && !expanded && (
+        <span className="visitor-clip-hint">▶</span>
+      )}
+
+      {expanded && (
+        <div
+          className="visitor-clip-player"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {clipUrl ? (
+            <video
+              src={clipUrl}
+              controls
+              autoPlay
+              muted
+              playsInline
+              className="visitor-clip-video"
+            />
+          ) : (
+            <span className="visitor-clip-none">No clip saved for this event</span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function RecentVisitors() {
   const [visitors, setVisitors] = useState<Visitor[]>([]);
   const { authenticated } = useAuth();
@@ -35,44 +125,32 @@ export default function RecentVisitors() {
   useEffect(() => {
     if (!authenticated) return;
     load();
-    const id = setInterval(load, 30_000); // refresh every 30s to catch new captures
+    const id = setInterval(load, 30_000);
     return () => clearInterval(id);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authenticated]);
 
   if (!authenticated) return null;
 
+  // Dedup: keep only the latest entry per label
+  const deduped = visitors
+    .reduce<Visitor[]>((acc, v) => {
+      if (!acc.find((x) => x.face_label === v.face_label)) acc.push(v);
+      return acc;
+    }, [])
+    .slice(0, 5);
+
   return (
     <div className="visitors-widget glass-sm feed-widget">
       <div className="feed-widget-header">Recent Visitors</div>
-      {visitors.length === 0 ? (
+      {deduped.length === 0 ? (
         <div className="feed-empty">No visitors captured yet</div>
       ) : (
         <div className="visitors-list">
-          {/* Dedup display: keep only the latest entry per label */}
-          {visitors
-            .reduce<Visitor[]>((acc, v) => {
-              if (!acc.find((x) => x.face_label === v.face_label)) acc.push(v);
-              return acc;
-            }, [])
-            .slice(0, 5)
-            .map((v) => (
-            <div key={v.id} className="visitor-item">
-              {v.imageUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={v.imageUrl} alt="" className="visitor-thumb" />
-              ) : (
-                <div className="visitor-thumb-placeholder">👤</div>
-              )}
-              <div className="visitor-info">
-                <span className="visitor-label">
-                  {v.face_label === "motion" ? "🚪 motion" : `👤 ${v.face_label}`}
-                </span>
-                <span className="visitor-time">{timeAgo(v.captured_at)}</span>
-              </div>
-            </div>
+          {deduped.map((v) => (
+            <VisitorCard key={v.id} visitor={v} />
           ))}
-          </div>
+        </div>
       )}
     </div>
   );
