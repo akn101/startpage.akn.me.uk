@@ -2,14 +2,19 @@
 
 import { useEffect, useRef } from "react";
 import { useAuth } from "@/context/AuthContext";
+import { saveClip } from "@/lib/clip-store";
 
 const MODEL_URL        = "/models";
 const MOTION_POLL_MS   = 500;
 const MOTION_THRESHOLD = 35;
 const MOTION_MIN_PCT   = 0.04;
 const CAPTURE_COOLDOWN = 8_000;
-const MATCH_THRESHOLD  = 0.55;           // face descriptor distance
+const MATCH_THRESHOLD  = 0.55;
 const DESCRIPTORS_KEY  = "face_descriptors";
+
+// 10 seconds of 1-second chunks = 10 chunks pre-event
+const PRE_BUFFER_CHUNKS  = 10;
+const POST_BUFFER_CHUNKS = 10;
 
 /** Returns fraction of pixels that changed significantly between two frames */
 function motionScore(prev: ImageData, curr: ImageData): number {
@@ -33,7 +38,6 @@ function captureJpeg(video: HTMLVideoElement, canvas: HTMLCanvasElement): string
   return canvas.toDataURL("image/jpeg", 0.7);
 }
 
-/** Load stored face descriptors from localStorage */
 function loadStoredDescriptors(): { label: string; descriptors: Float32Array[] }[] {
   try {
     const raw = localStorage.getItem(DESCRIPTORS_KEY);
@@ -48,7 +52,6 @@ function loadStoredDescriptors(): { label: string; descriptors: Float32Array[] }
   }
 }
 
-/** Save a new descriptor for a label to localStorage (keep up to 10 per label) */
 function saveDescriptor(label: string, descriptor: Float32Array) {
   const stored = loadStoredDescriptors();
   const entry = stored.find((e) => e.label === label);
@@ -57,21 +60,30 @@ function saveDescriptor(label: string, descriptor: Float32Array) {
   } else {
     stored.push({ label, descriptors: [descriptor] });
   }
-  const serialised = stored.map((e) => ({
-    label: e.label,
-    descriptors: e.descriptors.map((d) => Array.from(d)),
-  }));
-  localStorage.setItem(DESCRIPTORS_KEY, JSON.stringify(serialised));
+  localStorage.setItem(DESCRIPTORS_KEY, JSON.stringify(
+    stored.map((e) => ({ label: e.label, descriptors: e.descriptors.map((d) => Array.from(d)) }))
+  ));
 }
 
 export default function CameraMonitor({ enabled = true }: { enabled?: boolean }) {
   const { authenticated } = useAuth();
-  const videoRef     = useRef<HTMLVideoElement>(null);
-  const canvasRef    = useRef<HTMLCanvasElement>(null);
-  const prevFrameRef = useRef<ImageData | null>(null);
-  const streamRef    = useRef<MediaStream | null>(null);
-  const modelLoaded  = useRef(false);
-  const lastCapture  = useRef(0);
+  const videoRef      = useRef<HTMLVideoElement>(null);
+  const canvasRef     = useRef<HTMLCanvasElement>(null);
+  const prevFrameRef  = useRef<ImageData | null>(null);
+  const streamRef     = useRef<MediaStream | null>(null);
+  const modelLoaded   = useRef(false);
+  const lastCapture   = useRef(0);
+
+  // Clip buffering refs
+  const recorderRef        = useRef<MediaRecorder | null>(null);
+  const headerChunkRef     = useRef<Blob | null>(null);
+  const preBufferRef       = useRef<Blob[]>([]);
+  const capturingPostRef   = useRef(false);
+  const postBufferRef      = useRef<Blob[]>([]);
+  const captureTimestampRef = useRef(0);
+  const captureLabelRef    = useRef("");
+  const mimeTypeRef        = useRef("video/webm");
+  const stoppingRef        = useRef(false); // ignore final chunk on teardown
 
   useEffect(() => {
     if (!authenticated || !enabled) return;
@@ -104,6 +116,58 @@ export default function CameraMonitor({ enabled = true }: { enabled?: boolean })
       video.srcObject = stream;
       await video.play().catch(() => {});
 
+      // ── MediaRecorder for clip buffering ─────────────────────────
+      const mimeType = ["video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm"]
+        .find((m) => MediaRecorder.isTypeSupported(m)) ?? "video/webm";
+      mimeTypeRef.current = mimeType;
+
+      const recorder = new MediaRecorder(stream, { mimeType });
+      recorderRef.current = recorder;
+      stoppingRef.current = false;
+      let isFirstChunk = true;
+
+      recorder.ondataavailable = (e) => {
+        if (stoppingRef.current || !e.data || e.data.size === 0) return;
+
+        // First chunk = EBML header + Tracks — keep separate, don't ring-buffer it
+        if (isFirstChunk) {
+          headerChunkRef.current = e.data;
+          isFirstChunk = false;
+          return;
+        }
+
+        if (capturingPostRef.current) {
+          postBufferRef.current.push(e.data);
+          if (postBufferRef.current.length >= POST_BUFFER_CHUNKS) {
+            capturingPostRef.current = false;
+            // Assemble and save clip asynchronously
+            const header = headerChunkRef.current;
+            if (header) {
+              const blob = new Blob(
+                [header, ...preBufferRef.current, ...postBufferRef.current],
+                { type: mimeType },
+              );
+              saveClip({
+                id: crypto.randomUUID(),
+                timestamp: captureTimestampRef.current,
+                faceLabel: captureLabelRef.current,
+                blob,
+              }).catch(() => {});
+            }
+            postBufferRef.current = [];
+          }
+        } else {
+          // Keep a rolling window of the last PRE_BUFFER_CHUNKS chunks
+          preBufferRef.current.push(e.data);
+          if (preBufferRef.current.length > PRE_BUFFER_CHUNKS) {
+            preBufferRef.current.shift();
+          }
+        }
+      };
+
+      recorder.start(1_000); // 1-second chunks
+      // ─────────────────────────────────────────────────────────────
+
       const scratch = document.createElement("canvas");
       scratch.width  = 80;
       scratch.height = 60;
@@ -124,7 +188,6 @@ export default function CameraMonitor({ enabled = true }: { enabled?: boolean })
 
         lastCapture.current = now;
 
-        // Run full face detection with landmarks + descriptors
         const detections = await faceapi
           .detectAllFaces(video, new faceapi.TinyFaceDetectorOptions())
           .withFaceLandmarks()
@@ -135,7 +198,6 @@ export default function CameraMonitor({ enabled = true }: { enabled?: boolean })
         if (detections.length === 0) {
           label = "motion";
         } else {
-          // Try to match against stored descriptors
           const stored = loadStoredDescriptors();
           if (stored.length > 0) {
             const labeledDescriptors = stored.map(
@@ -145,12 +207,17 @@ export default function CameraMonitor({ enabled = true }: { enabled?: boolean })
             const best    = matcher.findBestMatch(detections[0].descriptor);
             label = best.label === "unknown" ? "Unknown Visitor" : best.label;
           } else {
-            // No stored reference yet — assume it's Ahnaf Kabir (first-time)
             label = "Ahnaf Kabir";
           }
-
-          // Always save descriptor back to reinforce recognition
           saveDescriptor(label, detections[0].descriptor);
+        }
+
+        // Trigger clip capture (post-buffer starts accumulating)
+        if (!capturingPostRef.current) {
+          captureTimestampRef.current = now;
+          captureLabelRef.current     = label;
+          postBufferRef.current       = [];
+          capturingPostRef.current    = true;
         }
 
         const imageData = captureJpeg(video, canvasRef.current);
@@ -168,6 +235,9 @@ export default function CameraMonitor({ enabled = true }: { enabled?: boolean })
 
     return () => {
       clearInterval(pollId);
+      stoppingRef.current = true;
+      recorderRef.current?.stop();
+      recorderRef.current = null;
       streamRef.current?.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
     };

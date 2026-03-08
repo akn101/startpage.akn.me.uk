@@ -385,6 +385,65 @@ html, body, main {
   font-style: italic;
 }
 
+/* ─── Todos AI Migrate ───────────────────────────────────── */
+.todos-header-actions { display: flex; align-items: center; gap: 0.3rem; }
+.todos-migrate-btn {
+  background: none; border: none; color: rgba(180,140,255,0.5);
+  font-size: 0.75rem; cursor: pointer; padding: 0 0.15rem; line-height: 1;
+  transition: color 0.15s;
+}
+.todos-migrate-btn:hover { color: rgba(180,140,255,0.9); }
+.todos-migrate-spinner { color: rgba(255,255,255,0.3); font-size: 0.75rem; animation: spin 1s linear infinite; display: inline-block; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.todos-migrate-done { color: rgba(120,220,120,0.7); font-size: 0.75rem; }
+
+.todos-migrate-preview {
+  display: flex; flex-direction: column; gap: 0.5rem;
+  padding: 0.4rem 0;
+}
+.todos-migrate-preview-list {
+  display: flex; flex-direction: column; gap: 0.2rem;
+  max-height: 200px; overflow-y: auto;
+}
+.todos-migrate-row {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 0.5rem; font-size: 0.68rem;
+}
+.todos-migrate-text {
+  color: rgba(255,255,255,0.7); flex: 1; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.todos-migrate-project {
+  font-size: 0.6rem; letter-spacing: 0.05em; flex-shrink: 0;
+  padding: 0.1rem 0.35rem; border-radius: 3px;
+}
+.todos-migrate-project.matched {
+  color: rgba(150,120,255,0.9); background: rgba(150,120,255,0.12);
+}
+.todos-migrate-project.unmatched {
+  color: rgba(255,255,255,0.2); font-style: italic;
+}
+.todos-migrate-actions { display: flex; gap: 0.4rem; }
+.todos-migrate-confirm {
+  background: rgba(150,120,255,0.2); border: 1px solid rgba(150,120,255,0.35);
+  color: rgba(180,150,255,0.9); font-size: 0.6rem; letter-spacing: 0.1em;
+  padding: 0.2rem 0.6rem; border-radius: 4px; cursor: pointer;
+  transition: background 0.15s;
+}
+.todos-migrate-confirm:hover:not(:disabled) { background: rgba(150,120,255,0.35); }
+.todos-migrate-confirm:disabled { opacity: 0.35; cursor: default; }
+.todos-migrate-cancel {
+  background: none; border: 1px solid rgba(255,255,255,0.1);
+  color: rgba(255,255,255,0.35); font-size: 0.6rem; letter-spacing: 0.1em;
+  padding: 0.2rem 0.6rem; border-radius: 4px; cursor: pointer;
+  transition: color 0.15s;
+}
+.todos-migrate-cancel:hover { color: rgba(255,255,255,0.6); }
+.todos-migrate-executing {
+  font-size: 0.65rem; color: rgba(255,255,255,0.3);
+  font-style: italic; padding: 0.5rem 0;
+}
+
 /* ─── Command palette ────────────────────────────────────── */
 .cmdk-overlay {
   position: fixed;
@@ -1172,13 +1231,21 @@ html, body, main {
 
 /* ─── Recent Visitors widget ─────────────────────────────── */
 .visitors-widget { padding: 1.2rem; display: flex; flex-direction: column; gap: 0.6rem; }
-.visitors-list   { display: flex; flex-direction: column; gap: 0.5rem; max-height: 240px; overflow-y: auto; }
-.visitor-item    { display: flex; align-items: center; gap: 0.6rem; }
-.visitor-thumb   { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; opacity: 0.85; }
-.visitor-thumb-placeholder { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.06); font-size: 1rem; }
-.visitor-info    { display: flex; flex-direction: column; gap: 0.1rem; }
+.visitors-list   { display: flex; flex-direction: column; gap: 0.5rem; max-height: 400px; overflow-y: auto; }
+.visitor-item    { display: flex; align-items: center; gap: 0.6rem; cursor: pointer; flex-wrap: wrap;
+                   border-radius: 6px; padding: 0.25rem; transition: background 0.15s; }
+.visitor-item:hover { background: rgba(255,255,255,0.04); }
+.visitor-item.expanded { background: rgba(255,255,255,0.03); }
+.visitor-thumb   { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; opacity: 0.85; flex-shrink: 0; }
+.visitor-thumb-placeholder { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.06); font-size: 1rem; flex-shrink: 0; }
+.visitor-info    { display: flex; flex-direction: column; gap: 0.1rem; flex: 1; }
 .visitor-label   { font-size: 0.75rem; color: rgba(255,255,255,0.8); }
 .visitor-time    { font-size: 0.65rem; color: rgba(255,255,255,0.35); }
+.visitor-clip-hint    { font-size: 0.6rem; color: rgba(255,255,255,0.2); margin-left: auto; }
+.visitor-clip-loading { font-size: 0.65rem; color: rgba(255,255,255,0.25); margin-left: auto; }
+.visitor-clip-player  { width: 100%; margin-top: 0.4rem; }
+.visitor-clip-video   { width: 100%; border-radius: 6px; max-height: 180px; background: #000; display: block; }
+.visitor-clip-none    { font-size: 0.6rem; color: rgba(255,255,255,0.2); font-style: italic; }
 
 /* ─── Location retry button ──────────────────────────────── */
 .location-retry { background: none; border: none; cursor: pointer; font-size: 0.75rem; padding: 0 0.2rem; vertical-align: middle; }
