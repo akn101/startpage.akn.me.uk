@@ -20,6 +20,11 @@ const STATUS_NEXT: Record<string, string> = {
   "In Progress": "Complete",
   "Complete":    "Not Started",
 };
+const STATUS_PREV: Record<string, string> = {
+  "Not Started": "Complete",
+  "In Progress": "Not Started",
+  "Complete":    "In Progress",
+};
 const STATUS_CLASS: Record<string, string> = {
   "Not Started": "assign-status-todo",
   "In Progress": "assign-status-progress",
@@ -58,11 +63,12 @@ export default function Assignments() {
     return () => window.removeEventListener("refreshData", load);
   }, []); // eslint-disable-line
 
-  const cycleStatus = async (id: string, current: string) => {
+  const cycleStatus = async (id: string, current: string, reverse = false) => {
     if (!authenticated) return;
-    const next = STATUS_NEXT[current] ?? "In Progress";
+    const map = reverse ? STATUS_PREV : STATUS_NEXT;
+    const next = map[current] ?? "In Progress";
     setAssignments((prev) => prev.map((a) => a.id === id ? { ...a, status: next } : a));
-    if (next === "Complete") {
+    if (next === "Complete" && !reverse) {
       setTimeout(() => setAssignments((prev) => prev.filter((a) => a.id !== id)), 1200);
     }
     await fetch("/api/assignments", {
@@ -92,8 +98,8 @@ export default function Assignments() {
               <button
                 type="button"
                 className={`assign-status-btn ${STATUS_CLASS[a.status] ?? "assign-status-todo"}`}
-                onClick={() => cycleStatus(a.id, a.status)}
-                title={`${a.status} — click to advance`}
+                onClick={(e) => cycleStatus(a.id, a.status, e.shiftKey)}
+                title={`${a.status} — click to advance, shift+click to go back`}
               >
                 {a.status || "?"}
               </button>

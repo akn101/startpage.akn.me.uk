@@ -37,6 +37,11 @@ const TASK_STATUS_CYCLE: Record<string, string> = {
   "In Progress": "Done",
   "Done":        "Todo",
 };
+const TASK_STATUS_CYCLE_PREV: Record<string, string> = {
+  "Todo":        "Done",
+  "In Progress": "Todo",
+  "Done":        "In Progress",
+};
 
 const TASK_STATUS_CLASS: Record<string, string> = {
   "Todo":        "task-status-todo",
@@ -105,10 +110,11 @@ export default function ProjectTracker() {
     return () => window.removeEventListener("refreshData", load);
   }, []);
 
-  const cycleTaskStatus = async (taskId: string, current: string) => {
-    const next = TASK_STATUS_CYCLE[current] ?? "In Progress";
+  const cycleTaskStatus = async (taskId: string, current: string, reverse = false) => {
+    const map = reverse ? TASK_STATUS_CYCLE_PREV : TASK_STATUS_CYCLE;
+    const next = map[current] ?? "In Progress";
     setTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, status: next } : t));
-    if (next === "Done") {
+    if (next === "Done" && !reverse) {
       setTimeout(() => setTasks((prev) => prev.filter((t) => t.id !== taskId)), 1000);
     }
     await fetch("/api/tasks", {
@@ -223,8 +229,8 @@ export default function ProjectTracker() {
                       <button
                         type="button"
                         className={`task-status-btn ${TASK_STATUS_CLASS[t.status] ?? ""}`}
-                        title={`${t.status} — click to advance`}
-                        onClick={() => authenticated && cycleTaskStatus(t.id, t.status)}
+                        title={`${t.status} — click to advance, shift+click to go back`}
+                        onClick={(e) => authenticated && cycleTaskStatus(t.id, t.status, e.shiftKey)}
                       />
                       <a href={t.url || undefined} target="_blank" rel="noreferrer" className="task-title">{t.title}</a>
                       {t.deadline && (
@@ -244,8 +250,8 @@ export default function ProjectTracker() {
                       <button
                         type="button"
                         className={`task-status-btn ${TASK_STATUS_CLASS[t.status] ?? ""}`}
-                        title={`${t.status} — click to advance`}
-                        onClick={() => authenticated && cycleTaskStatus(t.id, t.status)}
+                        title={`${t.status} — click to advance, shift+click to go back`}
+                        onClick={(e) => authenticated && cycleTaskStatus(t.id, t.status, e.shiftKey)}
                       />
                       <span className="task-title muted">{t.title}</span>
                       {t.deadline && (

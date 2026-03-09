@@ -103,7 +103,7 @@ function VisitorCard({ visitor }: { visitor: Visitor }) {
               className="visitor-clip-video"
             />
           ) : (
-            <span className="visitor-clip-none">No clip saved for this event</span>
+            <span className="visitor-clip-none">Clip not saved on this device</span>
           )}
         </div>
       )}
