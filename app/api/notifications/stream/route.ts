@@ -8,6 +8,7 @@ import { randomUUID } from "crypto";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
+export const maxDuration = 55;
 
 export async function GET(req: NextRequest) {
   const id = randomUUID();
