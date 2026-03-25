@@ -100,7 +100,7 @@ export default function ProjectsPanel() {
             <div className="display-section-header">Active projects</div>
             {activeProjects.map((p) => {
               const secs = timeByProject[p.name] ?? 0;
-              const inProgress = inProgressTasks.filter((t) => t.project === p.name).slice(0, 2);
+              const inProgress = inProgressTasks.filter((t) => t.project === p.name).slice(0, 3);
               return (
                 <div key={p.id} style={{ marginBottom: "0.6rem" }}>
                   <div className="display-list-item">

@@ -80,7 +80,7 @@ export default function ProductivityPanel() {
     const key = s.project ?? s.label ?? "Other";
     byProject[key] = (byProject[key] ?? 0) + s.duration_s;
   }
-  const entries = Object.entries(byProject).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  const entries = Object.entries(byProject).sort((a, b) => b[1] - a[1]).slice(0, 8);
   const maxSecs = entries[0]?.[1] ?? 1;
   const totalSecs = entries.reduce((acc, [, v]) => acc + v, 0);
 
@@ -119,7 +119,7 @@ export default function ProductivityPanel() {
               {myPRs.length > 0 ? ` · ${myPRs.length} open PR${myPRs.length !== 1 ? "s" : ""}` : ""}
               {reviewPRs.length > 0 ? ` · ${reviewPRs.length} to review` : ""}
             </div>
-            {myPRs.slice(0, 3).map((pr, i) => (
+            {myPRs.slice(0, 5).map((pr, i) => (
               <div key={i} className="display-list-item">
                 <span
                   className="display-list-item-dot"

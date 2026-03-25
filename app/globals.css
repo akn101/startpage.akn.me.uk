@@ -1450,6 +1450,7 @@ html, body, main {
   flex-direction: column;
   gap: 0.9rem;
   min-height: 0;
+  justify-content: space-between;
 }
 
 .display-section-header {
@@ -1596,6 +1597,79 @@ html, body, main {
   inset: 0;
   z-index: 200;
 }
+
+/* ── Morning panel layout ───────────────────────────────── */
+.display-morning-layout {
+  justify-content: space-between !important;
+}
+
+.display-morning-top { flex-shrink: 0; }
+
+.display-morning-weather {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+  padding: 0.5rem 0;
+  border-top: 1px solid #e8e8e8;
+  border-bottom: 1px solid #e8e8e8;
+}
+
+.display-morning-weather-main {
+  font-size: 1.5rem;
+  font-weight: 300;
+  color: #000;
+  font-variant-numeric: tabular-nums;
+}
+
+.display-morning-weather-detail {
+  font-size: 0.78rem;
+  color: #555;
+}
+
+.display-morning-events {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.display-morning-stats {
+  display: flex;
+  gap: 1.5rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid #e8e8e8;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.display-morning-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.05rem;
+}
+
+.display-morning-stat-val {
+  font-size: 1.3rem;
+  font-weight: 200;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  color: #000;
+}
+
+.display-morning-stat-label {
+  font-size: 0.55rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #888;
+}
+
+.display-morning-stat--warn .display-morning-stat-val { color: #c00; }
+.display-morning-stat--warn .display-morning-stat-label { color: #c00; }
 
 /* ── Glance panel 2×2 grid ───────────────────────────────── */
 .display-glance-grid {

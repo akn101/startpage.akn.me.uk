@@ -155,7 +155,7 @@ function parseIcsBlock(ics: string): CalEvent | null {
     const val = raw.slice(colon + 1);
 
     if (key === "UID")           ev.uid      = val;
-    if (key === "SUMMARY")       ev.summary  = val.replace(/\\,/g, ",").replace(/\\n/g, " ");
+    if (key === "SUMMARY")       ev.summary  = val.replace(/\\,/g, ",").replace(/\\n/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'");
     if (key === "LOCATION")      ev.location = val.replace(/\\,/g, ",");
     if (key === "URL")           ev.joinUrl  = val.trim();
     if (key === "X-GOOGLE-CONFERENCE") ev.joinUrl = val.trim();

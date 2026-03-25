@@ -45,13 +45,13 @@ export default function TasksPanel() {
     if (a.status === "fulfilled") {
       const raw = a.value;
       const list: Assignment[] = Array.isArray(raw) ? raw : (raw.assignments ?? []);
-      const cutoff = Date.now() + 14 * 86_400_000;
+      const cutoff = Date.now() + 21 * 86_400_000;
       setAssignments(
         list
           .filter((x) => x.status !== "Complete" && x.status !== "Archived")
-          .filter((x) => new Date(x.due).getTime() <= cutoff)
+          .filter((x) => !x.due || new Date(x.due).getTime() <= cutoff)
           .sort((a, b) => new Date(a.due).getTime() - new Date(b.due).getTime())
-          .slice(0, 8)
+          .slice(0, 10)
       );
     }
     setUpdated(new Date());
@@ -76,7 +76,7 @@ export default function TasksPanel() {
         {todos.length > 0 && (
           <div>
             <div className="display-section-header">Todos ({todos.length})</div>
-            {todos.slice(0, 7).map((t) => (
+            {todos.slice(0, 10).map((t) => (
               <div key={t.id} className="display-list-item">
                 <span className="display-list-item-dot" style={{ minWidth: "1.2rem" }}>□</span>
                 <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
@@ -84,8 +84,8 @@ export default function TasksPanel() {
                 </span>
               </div>
             ))}
-            {todos.length > 7 && (
-              <div className="display-label" style={{ marginTop: "0.1rem" }}>+{todos.length - 7} more</div>
+            {todos.length > 10 && (
+              <div className="display-label" style={{ marginTop: "0.1rem" }}>+{todos.length - 10} more</div>
             )}
           </div>
         )}
