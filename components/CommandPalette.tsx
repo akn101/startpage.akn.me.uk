@@ -94,7 +94,8 @@ export default function CommandPalette({ onAddTodo, cameraEnabled, onCameraToggl
     { label: "90%",  value: 90 },
   ];
 
-  const isCamera = input.toLowerCase().startsWith("/camera");
+  const isCamera  = input.toLowerCase().startsWith("/camera");
+  const isDisplay = input.toLowerCase().startsWith("/display");
 
   const plainText   = input.trim();
   const isCommand   = plainText.startsWith("/");
@@ -132,7 +133,7 @@ export default function CommandPalette({ onAddTodo, cameraEnabled, onCameraToggl
     close();
   }, [plainText, handleNavigate, recordQuery, close]);
 
-  const suppressFilter = isTodo || isRecord || isAlarm || isDim || isCamera;
+  const suppressFilter = isTodo || isRecord || isAlarm || isDim || isCamera || isDisplay;
 
   if (!open) return null;
 
@@ -140,7 +141,7 @@ export default function CommandPalette({ onAddTodo, cameraEnabled, onCameraToggl
     <div className="cmdk-overlay" onClick={(e) => { if (e.target === e.currentTarget) close(); }}>
       <Command className="cmdk-dialog" shouldFilter={!suppressFilter} loop>
         <Command.Input
-          placeholder="Search Google, or /todo · /record · /alarm · /camera…"
+          placeholder="Search Google, or /todo · /record · /alarm · /camera · /display…"
           value={input}
           onValueChange={setInput}
           autoFocus
@@ -260,7 +261,16 @@ export default function CommandPalette({ onAddTodo, cameraEnabled, onCameraToggl
             </Command.Group>
           )}
 
-          {!isTodo && !isRecord && !isAlarm && !isDim && !isCamera && (
+          {isDisplay && (
+            <Command.Group heading="Display">
+              <Command.Item value="display-open" onSelect={() => { window.location.href = "/display"; close(); }}>
+                <span className="cmdk-icon">▣</span>
+                Open display mode
+              </Command.Item>
+            </Command.Group>
+          )}
+
+          {!isTodo && !isRecord && !isAlarm && !isDim && !isCamera && !isDisplay && (
             <Command.Group heading="Go to">
               {quickLinks.map((link) => (
                 <Command.Item
@@ -276,7 +286,7 @@ export default function CommandPalette({ onAddTodo, cameraEnabled, onCameraToggl
             </Command.Group>
           )}
 
-          {!isTodo && !isRecord && !isAlarm && !isDim && !isCamera && (
+          {!isTodo && !isRecord && !isAlarm && !isDim && !isCamera && !isDisplay && (
             <Command.Group heading="Actions">
               <Command.Item value="add todo" onSelect={() => setInput("/todo ")}>
                 <span className="cmdk-icon">＋</span>
@@ -308,6 +318,11 @@ export default function CommandPalette({ onAddTodo, cameraEnabled, onCameraToggl
               }}>
                 <span className="cmdk-icon">✓</span>
                 Clear completed todos
+              </Command.Item>
+              <Command.Item value="open display" onSelect={() => { window.location.href = "/display"; close(); }}>
+                <span className="cmdk-icon">▣</span>
+                Display mode
+                <span className="cmdk-shortcut">/display</span>
               </Command.Item>
             </Command.Group>
           )}

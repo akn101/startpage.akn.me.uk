@@ -24,6 +24,7 @@ const CameraMonitor    = dynamic(() => import("@/components/CameraMonitor"),    
 const RecentVisitors   = dynamic(() => import("@/components/RecentVisitors"),   { ssr: false });
 const MiniClock        = dynamic(() => import("@/components/MiniClock"),         { ssr: false });
 const Assignments      = dynamic(() => import("@/components/Assignments"),       { ssr: false });
+const DisplayShell     = dynamic(() => import("@/components/display/DisplayShell"), { ssr: false });
 
 type DimLevel = 0 | 25 | 50 | 75 | 90;
 
@@ -60,6 +61,7 @@ export default function Page() {
   const { toasts, dismiss } = useNotifications();
   const { autoDim, manualDim } = useDim();
   const [pendingTodo, setPendingTodo] = useState<string | null>(null);
+  const [showDisplay, setShowDisplay] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [showMini, setShowMini] = useState(false);
 
@@ -85,6 +87,28 @@ export default function Page() {
     const events = ["mousemove", "keydown", "click", "scroll", "touchstart"] as const;
     events.forEach((ev) => window.addEventListener(ev, onActivity, { passive: true }));
     return () => events.forEach((ev) => window.removeEventListener(ev, onActivity));
+  }, []);
+
+  // Hide display mode on mouse movement or Escape key
+  useEffect(() => {
+    const hide = () => setShowDisplay(false);
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setShowDisplay(false); };
+    window.addEventListener("mousemove", hide, { passive: true });
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("mousemove", hide);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, []);
+
+  // Show display mode after idle (threshold configurable via sp_display_idle localStorage, default 10 min)
+  useEffect(() => {
+    const raw = typeof window !== "undefined" ? localStorage.getItem("sp_display_idle") : null;
+    const DISPLAY_IDLE_MS = raw ? Number(raw) * 60_000 : 10 * 60 * 1000;
+    const id = setInterval(() => {
+      if (Date.now() - lastActivityRef.current > DISPLAY_IDLE_MS) setShowDisplay(true);
+    }, 30_000);
+    return () => clearInterval(id);
   }, []);
 
   // Auto-refresh data every 30 min + reload on new deployment after 10 min idle
@@ -207,6 +231,11 @@ export default function Page() {
             </div>
           </section>
 
+          {/* Section 4: Display mode — TRMNL-style glanceable panel */}
+          <section className="snap-section section-display">
+            <DisplayShell inline />
+          </section>
+
         </div>
 
         {/* ── Background camera monitor (auth-gated, invisible) ── */}
@@ -233,7 +262,22 @@ export default function Page() {
         <NotificationToast toasts={toasts} onDismiss={dismiss} />
 
         {/* ── Keyboard hint ── */}
-        <div className="kbd-hint">⌘K · /record · /alarm · /dim · /camera</div>
+        <div className="kbd-hint">⌘K · /record · /alarm · /dim · /camera · /display</div>
+
+        {/* ── Idle display mode overlay ── */}
+        {showDisplay && (
+          <div className="display-overlay">
+            <button
+              type="button"
+              className="display-close-btn"
+              onClick={() => setShowDisplay(false)}
+              aria-label="Close display mode"
+            >
+              ×
+            </button>
+            <DisplayShell />
+          </div>
+        )}
       </main>
     </TimeTrackerProvider>
   );
