@@ -169,6 +169,28 @@ export default function Page() {
     return () => el.removeEventListener("scroll", onScroll);
   }, []);
 
+  // Animate sections when they snap into view
+  useEffect(() => {
+    const sections = document.querySelectorAll<HTMLElement>(".snap-section");
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.classList.remove("is-visible");
+            // Force reflow so re-entering a section replays the animation
+            void (entry.target as HTMLElement).offsetWidth;
+            entry.target.classList.add("is-visible");
+          } else {
+            entry.target.classList.remove("is-visible");
+          }
+        });
+      },
+      { threshold: 0.5 }
+    );
+    sections.forEach((s) => observer.observe(s));
+    return () => observer.disconnect();
+  }, []);
+
   const handleAddTodo = useCallback((text: string) => {
     setPendingTodo(text);
     setTimeout(() => setPendingTodo(null), 100);

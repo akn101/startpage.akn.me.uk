@@ -126,6 +126,21 @@ html, body, main {
   gap: 1rem;
 }
 
+/* Section content entrance animation */
+.snap-section > * {
+  opacity: 0;
+  transform: translateY(1rem);
+  transition: none;
+}
+.snap-section.is-visible > * {
+  animation: sectionEnter 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+.snap-section.is-visible > *:nth-child(2) { animation-delay: 0.05s; }
+.snap-section.is-visible > *:nth-child(3) { animation-delay: 0.10s; }
+.snap-section.is-visible > *:nth-child(4) { animation-delay: 0.15s; }
+.snap-section.is-visible > *:nth-child(5) { animation-delay: 0.20s; }
+.snap-section.is-visible > *:nth-child(6) { animation-delay: 0.25s; }
+
 /* Section 1: landing — giant clock only */
 .section-landing {
   gap: 1.4rem;
@@ -463,6 +478,10 @@ html, body, main {
   align-items: flex-start;
   justify-content: center;
   padding-top: 15vh;
+  animation: fadeIn 0.15s ease;
+}
+.cmdk-overlay--closing {
+  animation: fadeOut 0.18s ease forwards;
 }
 
 .cmdk-dialog {
@@ -474,6 +493,10 @@ html, body, main {
   border-radius: 16px;
   overflow: hidden;
   box-shadow: 0 32px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.05);
+  animation: slideUp 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.cmdk-dialog--closing {
+  animation: slideDown 0.18s cubic-bezier(0.7, 0, 0.84, 0) forwards;
 }
 
 [cmdk-input] {
@@ -1244,6 +1267,22 @@ html, body, main {
 @keyframes slideUp {
   from { transform: translateY(0.75rem); opacity: 0; }
   to   { transform: translateY(0);       opacity: 1; }
+}
+@keyframes slideDown {
+  from { transform: translateY(0);       opacity: 1; }
+  to   { transform: translateY(0.75rem); opacity: 0; }
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes fadeOut {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+@keyframes sectionEnter {
+  from { opacity: 0; transform: translateY(1.5rem); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 /* ─── Recent Visitors widget ─────────────────────────────── */

@@ -40,7 +40,6 @@ export default function CommandPalette({ onAddTodo, cameraEnabled, onCameraToggl
         e.preventDefault();
         setOpen((v) => !v);
       }
-      if (e.key === "Escape") setOpen(false);
     };
     // openCommandPalette event: supports optional prefill from detail
     const paletteHandler = (e: Event) => {
@@ -71,7 +70,24 @@ export default function CommandPalette({ onAddTodo, cameraEnabled, onCameraToggl
     };
   }, []);
 
-  const close = useCallback(() => { setOpen(false); setInput(""); setSuggestions([]); }, []);
+  const [closing, setClosing] = useState(false);
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const close = useCallback(() => {
+    setClosing(true);
+    closeTimerRef.current = setTimeout(() => {
+      setOpen(false);
+      setClosing(false);
+      setInput("");
+      setSuggestions([]);
+    }, 180);
+  }, []);
+
+  useEffect(() => {
+    const onEsc = (e: KeyboardEvent) => { if (e.key === "Escape" && open) close(); };
+    document.addEventListener("keydown", onEsc);
+    return () => document.removeEventListener("keydown", onEsc);
+  }, [open, close]);
 
   const isTodo   = input.toLowerCase().startsWith("/todo ");
   const todoText = input.replace(/^\/todo\s*/i, "").trim();
@@ -135,11 +151,11 @@ export default function CommandPalette({ onAddTodo, cameraEnabled, onCameraToggl
 
   const suppressFilter = isTodo || isRecord || isAlarm || isDim || isCamera || isDisplay;
 
-  if (!open) return null;
+  if (!open && !closing) return null;
 
   return (
-    <div className="cmdk-overlay" onClick={(e) => { if (e.target === e.currentTarget) close(); }}>
-      <Command className="cmdk-dialog" shouldFilter={!suppressFilter} loop>
+    <div className={`cmdk-overlay${closing ? " cmdk-overlay--closing" : ""}`} onClick={(e) => { if (e.target === e.currentTarget) close(); }}>
+      <Command className={`cmdk-dialog${closing ? " cmdk-dialog--closing" : ""}`} shouldFilter={!suppressFilter} loop>
         <Command.Input
           placeholder="Search Google, or /todo · /record · /alarm · /camera · /display…"
           value={input}
