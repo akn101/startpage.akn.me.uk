@@ -2044,3 +2044,34 @@ html, body, main {
   transition: background 0.15s;
 }
 .display-close-btn:hover { background: #f0f0f0; }
+
+/* ── status admin ── */
+.status-admin-loading { display: flex; align-items: center; justify-content: center; height: 100vh; color: rgba(0,0,0,0.4); font-size: 14px; }
+.status-admin { max-width: 680px; margin: 0 auto; padding: 40px 24px 80px; font-family: system-ui, sans-serif; }
+.status-admin-header { display: flex; align-items: center; gap: 16px; margin-bottom: 32px; flex-wrap: wrap; }
+.status-admin-header h1 { font-size: 18px; font-weight: 500; margin: 0; }
+.status-admin-back { font-size: 13px; color: rgba(0,0,0,0.4); text-decoration: none; }
+.status-admin-back:hover { color: rgba(0,0,0,0.7); }
+.status-admin-msg { font-size: 13px; color: #16a34a; margin-left: auto; }
+.status-admin section { margin-bottom: 40px; }
+.status-admin h2 { font-size: 12px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: rgba(0,0,0,0.35); margin: 0 0 12px; }
+.status-admin-empty { font-size: 13px; color: rgba(0,0,0,0.35); margin-bottom: 16px; }
+.status-admin-row { display: flex; align-items: flex-start; gap: 12px; padding: 12px 0; border-bottom: 1px solid rgba(0,0,0,0.06); }
+.status-admin-row-info { flex: 1; min-width: 0; }
+.status-admin-row-info strong { display: block; font-size: 14px; font-weight: 500; }
+.status-admin-row-info p { font-size: 13px; color: rgba(0,0,0,0.5); margin: 4px 0 0; }
+.status-admin-meta { display: block; font-size: 12px; color: rgba(0,0,0,0.4); margin-top: 2px; text-decoration: none; }
+a.status-admin-meta:hover { color: rgba(0,0,0,0.6); text-decoration: underline; }
+.status-admin-btn { border: 1px solid rgba(0,0,0,0.12); border-radius: 6px; padding: 4px 10px; font-size: 12px; cursor: pointer; background: transparent; font-family: inherit; white-space: nowrap; }
+.status-admin-btn:disabled { opacity: 0.4; cursor: default; }
+.status-admin-btn-resolve { color: #16a34a; border-color: rgba(22,163,74,0.3); }
+.status-admin-btn-resolve:hover:not(:disabled) { background: rgba(22,163,74,0.08); }
+.status-admin-btn-remove { color: #dc2626; border-color: rgba(220,38,38,0.3); }
+.status-admin-btn-remove:hover:not(:disabled) { background: rgba(220,38,38,0.08); }
+.status-admin-form { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.status-admin-form input, .status-admin-form textarea { border: 1px solid rgba(0,0,0,0.12); border-radius: 8px; padding: 8px 12px; font-size: 14px; font-family: inherit; outline: none; background: #fff; }
+.status-admin-form input:focus, .status-admin-form textarea:focus { border-color: rgba(102,126,234,0.5); }
+.status-admin-form textarea { resize: vertical; }
+.status-admin-form button { align-self: flex-start; background: rgba(102,126,234,0.12); color: #4f46e5; border: 1px solid rgba(102,126,234,0.25); border-radius: 8px; padding: 8px 20px; font-size: 13px; cursor: pointer; font-family: inherit; }
+.status-admin-form button:hover:not(:disabled) { background: rgba(102,126,234,0.2); }
+.status-admin-form button:disabled { opacity: 0.4; cursor: default; }
