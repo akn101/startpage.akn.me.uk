@@ -25,6 +25,7 @@ const RecentVisitors   = dynamic(() => import("@/components/RecentVisitors"),   
 const MiniClock        = dynamic(() => import("@/components/MiniClock"),         { ssr: false });
 const Assignments      = dynamic(() => import("@/components/Assignments"),       { ssr: false });
 const HackerNews       = dynamic(() => import("@/components/HackerNews"),        { ssr: false });
+const ThoughtsFeed     = dynamic(() => import("@/components/ThoughtsFeed"),      { ssr: false });
 const DisplayShell     = dynamic(() => import("@/components/display/DisplayShell"), { ssr: false });
 
 type DimLevel = 0 | 25 | 50 | 75 | 90;
@@ -252,6 +253,7 @@ export default function Page() {
               <CalendarWidget />
               <PhotoSlideshow />
               <RecentVisitors />
+              <ThoughtsFeed />
             </div>
           </section>
 

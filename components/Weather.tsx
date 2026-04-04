@@ -43,17 +43,8 @@ async function fetchByIP(): Promise<WeatherData> {
 
 export default function Weather() {
   const [weather, setWeather] = useState<WeatherData | null>(null);
-  const [denied, setDenied]   = useState(false);
 
-  const load = () => {
-    if (!navigator.geolocation) { fetchByIP().then(setWeather).catch(() => {}); return; }
-    navigator.geolocation.getCurrentPosition(
-      ({ coords }) => fetchWeather(coords.latitude, coords.longitude).then(setWeather).catch(() => {}),
-      () => { setDenied(true); fetchByIP().then(setWeather).catch(() => {}); }
-    );
-  };
-
-  useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { fetchByIP().then(setWeather).catch(() => {}); }, []);
 
   if (!weather) return (
     <div className="weather-widget glass-sm">
@@ -70,9 +61,6 @@ export default function Weather() {
         <span className="weather-temp">{weather.temp}°C</span>
         <span className="weather-meta">
           {weather.city ? `${weather.city} · ` : ""}{label} · {weather.windspeed} km/h
-          {denied && (
-            <button type="button" className="location-retry" onClick={load} title="Re-enable location">📍</button>
-          )}
         </span>
       </div>
     </div>

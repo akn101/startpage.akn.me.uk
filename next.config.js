@@ -25,7 +25,7 @@ const nextConfig = {
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               "font-src 'self' https://fonts.gstatic.com",
               "img-src 'self' data: blob: https:",
-              "connect-src 'self' https://*.supabase.co https://api.notion.com https://api.github.com https://wttr.in https://api.akn.me.uk https://hacker-news.firebaseio.com",
+              "connect-src 'self' https://*.supabase.co https://api.notion.com https://api.github.com https://wttr.in https://api.akn.me.uk https://hacker-news.firebaseio.com https://thoughts.akn.me.uk https://ipapi.co https://api.open-meteo.com",
               "worker-src 'self' blob:",
               "frame-ancestors 'none'",
             ].join("; "),
