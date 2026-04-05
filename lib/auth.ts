@@ -31,6 +31,8 @@ export async function requireAuth(): Promise<Response | null> {
 export async function getUid(): Promise<string | null> {
   const session = await getAuthSession();
   if (!session || !hasAccess(session)) return null;
+  // Map legacy 'local' uid (pre-migration access code sessions) to owner uid
+  if (session.uid === 'local') return process.env.STARTPAGE_OWNER_UID ?? session.uid;
   return session.uid;
 }
 
