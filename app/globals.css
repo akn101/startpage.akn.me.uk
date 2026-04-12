@@ -960,6 +960,102 @@ html, body, main {
   font-style: italic;
 }
 
+/* ─── Exam Countdown ─────────────────────────────────────── */
+.exam-countdown { gap: 0.3rem; }
+
+.exam-next {
+  background: rgba(255,255,255,0.04);
+  border-radius: 10px;
+  padding: 0.6rem 0.75rem;
+  margin-bottom: 0.2rem;
+  flex-shrink: 0;
+}
+
+.exam-next-label {
+  font-size: 0.55rem;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.2);
+  margin-bottom: 0.15rem;
+}
+
+.exam-next-name {
+  font-size: 0.75rem;
+  font-weight: 600;
+  margin-bottom: 0.1rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.exam-next-countdown {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: rgba(255,255,255,0.88);
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  font-variant-numeric: tabular-nums;
+}
+
+.exam-next-date {
+  font-size: 0.58rem;
+  color: rgba(255,255,255,0.28);
+  margin-top: 0.15rem;
+}
+
+.exam-list {
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+.exam-item {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.28rem 0;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  font-size: 0.68rem;
+}
+
+.exam-item:last-child { border-bottom: none; }
+
+.exam-item--past { opacity: 0.28; }
+
+.exam-item--urgent .exam-item-days { color: rgba(191,97,106,0.9); }
+
+.exam-item-tag {
+  font-size: 0.55rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  min-width: 2.6rem;
+  flex-shrink: 0;
+}
+
+.exam-item-name {
+  flex: 1;
+  color: rgba(255,255,255,0.62);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.exam-item-days {
+  font-size: 0.62rem;
+  color: rgba(255,255,255,0.28);
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.exam-all-done {
+  font-size: 0.7rem;
+  color: rgba(255,255,255,0.22);
+  text-align: center;
+  padding: 0.75rem 0;
+}
+
 /* ─── Android FAB ────────────────────────────────────────── */
 .fab-cmdk {
   display: flex;

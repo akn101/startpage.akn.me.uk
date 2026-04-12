@@ -27,6 +27,7 @@ const Assignments      = dynamic(() => import("@/components/Assignments"),      
 const HackerNews       = dynamic(() => import("@/components/HackerNews"),        { ssr: false });
 const ThoughtsFeed     = dynamic(() => import("@/components/ThoughtsFeed"),      { ssr: false });
 const DisplayShell     = dynamic(() => import("@/components/display/DisplayShell"), { ssr: false });
+const ExamCountdown    = dynamic(() => import("@/components/ExamCountdown"),        { ssr: false });
 
 type DimLevel = 0 | 25 | 50 | 75 | 90;
 
@@ -262,6 +263,7 @@ export default function Page() {
           {/* Section 3: Feed tiles */}
           <section className="snap-section section-feed">
             <div className="feed-section">
+              <ExamCountdown />
               <Assignments />
               <ProjectTracker />
               <GitHubPRs />
