@@ -1,8 +1,22 @@
-import { createClient } from "@supabase/supabase-js";
+import { createClient, SupabaseClient } from "@supabase/supabase-js";
 
-const url  = process.env.SUPABASE_URL!;
-const key  = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+// Defer client creation to first request so the module can be imported
+// at build time without SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY present.
+let _client: SupabaseClient | null = null;
 
-export const db = createClient(url, key, {
-  auth: { persistSession: false },
+function getClient(): SupabaseClient {
+  if (!_client) {
+    _client = createClient(
+      process.env.SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      { auth: { persistSession: false } },
+    );
+  }
+  return _client;
+}
+
+export const db = new Proxy({} as SupabaseClient, {
+  get(_target, prop, receiver) {
+    return Reflect.get(getClient(), prop, receiver);
+  },
 });
