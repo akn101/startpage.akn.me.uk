@@ -120,10 +120,13 @@ export default function CommandPalette({ onAddTodo, cameraEnabled, onCameraToggl
 
   const isCamera  = input.toLowerCase().startsWith("/camera");
   const isDisplay = input.toLowerCase().startsWith("/display");
-
+  const isLogin   = input.toLowerCase().startsWith("/login");
+  const isLogout  = input.toLowerCase().startsWith("/logout");
+  const isClear   = input.toLowerCase().startsWith("/clear");
 
   const plainText   = input.trim();
   const isCommand   = plainText.startsWith("/");
+  const isJustSlash = plainText === "/";
   const detectedURL = !isCommand ? normalizeURL(plainText) : null;
   const showGoogle  = plainText.length > 0 && !isCommand;
 
@@ -158,7 +161,7 @@ export default function CommandPalette({ onAddTodo, cameraEnabled, onCameraToggl
     close();
   }, [plainText, handleNavigate, recordQuery, close]);
 
-  const suppressFilter = isTodo || isRecord || isAlarm || isDim || isCamera || isDisplay;
+  const suppressFilter = isTodo || isRecord || isAlarm || isDim || isCamera || isDisplay || isLogin || isLogout || isClear || isJustSlash;
 
   if (!open && !closing) return null;
 
@@ -309,7 +312,89 @@ export default function CommandPalette({ onAddTodo, cameraEnabled, onCameraToggl
             </Command.Group>
           )}
 
-          {!isTodo && !isRecord && !isAlarm && !isDim && !isBright && !isCamera && !isDisplay && (
+          {isLogin && !authenticated && (
+            <Command.Group heading="Auth">
+              <Command.Item value="login-aknid" onSelect={() => { window.location.href = "/api/auth/callback"; close(); }}>
+                <span className="cmdk-icon">→</span>
+                Login with akn ID
+              </Command.Item>
+            </Command.Group>
+          )}
+
+          {isLogout && authenticated && (
+            <Command.Group heading="Auth">
+              <Command.Item value="logout-now" onSelect={async () => {
+                setLoggingOut(true);
+                await fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
+                window.location.href = "/access";
+              }}>
+                <span className="cmdk-icon">←</span>
+                {loggingOut ? "Logging out…" : "Log out"}
+              </Command.Item>
+            </Command.Group>
+          )}
+
+          {isClear && (
+            <Command.Group heading="Tasks">
+              <Command.Item value="clear-done-todos" onSelect={() => {
+                window.dispatchEvent(new CustomEvent("clearDoneTodos")); close();
+              }}>
+                <span className="cmdk-icon">✓</span>
+                Clear completed todos
+              </Command.Item>
+            </Command.Group>
+          )}
+
+          {isJustSlash && (
+            <Command.Group heading="All Commands">
+              <Command.Item value="cmd-todo" onSelect={() => setInput("/todo ")}>
+                <span className="cmdk-icon">＋</span>
+                /todo — Add a todo
+              </Command.Item>
+              <Command.Item value="cmd-record" onSelect={() => setInput("/record ")}>
+                <span className="cmdk-icon">▶</span>
+                /record — Start/stop timer
+              </Command.Item>
+              <Command.Item value="cmd-alarm" onSelect={() => setInput("/alarm ")}>
+                <span className="cmdk-icon">⏰</span>
+                /alarm — Set an alarm
+              </Command.Item>
+              <Command.Item value="cmd-dim" onSelect={() => setInput("/dim")}>
+                <span className="cmdk-icon">🌙</span>
+                /dim — Dim screen
+              </Command.Item>
+              <Command.Item value="cmd-bright" onSelect={() => setInput("/bright")}>
+                <span className="cmdk-icon">☀</span>
+                /bright — Background brightness
+              </Command.Item>
+              <Command.Item value="cmd-camera" onSelect={() => setInput("/camera")}>
+                <span className="cmdk-icon">📷</span>
+                /camera — Toggle camera
+              </Command.Item>
+              <Command.Item value="cmd-display" onSelect={() => setInput("/display")}>
+                <span className="cmdk-icon">▣</span>
+                /display — Display mode
+              </Command.Item>
+              <Command.Item value="cmd-clear" onSelect={() => setInput("/clear")}>
+                <span className="cmdk-icon">✓</span>
+                /clear — Clear completed todos
+              </Command.Item>
+              {!authenticated && (
+                <Command.Item value="cmd-login" onSelect={() => setInput("/login")}>
+                  <span className="cmdk-icon">→</span>
+                  /login — Login with akn ID
+                </Command.Item>
+              )}
+              {authenticated && (
+                <Command.Item value="cmd-logout" onSelect={() => setInput("/logout")}>
+                  <span className="cmdk-icon">←</span>
+                  /logout — Log out
+                </Command.Item>
+              )}
+            </Command.Group>
+          )}
+
+          {!isTodo && !isRecord && !isAlarm && !isDim && !isBright && !isCamera && !isDisplay && !isLogin && !isLogout && !isClear && !isJustSlash && (
             <Command.Group heading="Go to">
               {quickLinks.map((link) => (
                 <Command.Item
@@ -325,12 +410,13 @@ export default function CommandPalette({ onAddTodo, cameraEnabled, onCameraToggl
             </Command.Group>
           )}
 
-          {!isTodo && !isRecord && !isAlarm && !isDim && !isBright && !isCamera && !isDisplay && (
+          {!isTodo && !isRecord && !isAlarm && !isDim && !isBright && !isCamera && !isDisplay && !isLogin && !isLogout && !isClear && !isJustSlash && (
             <Command.Group heading="Actions">
               {!authenticated && (
                 <Command.Item value="login" onSelect={() => { window.location.href = "/api/auth/callback"; close(); }}>
                   <span className="cmdk-icon">→</span>
                   Login with akn ID
+                  <span className="cmdk-shortcut">/login</span>
                 </Command.Item>
               )}
               {authenticated && (
@@ -341,6 +427,7 @@ export default function CommandPalette({ onAddTodo, cameraEnabled, onCameraToggl
                 }}>
                   <span className="cmdk-icon">←</span>
                   {loggingOut ? "Logging out…" : "Log out"}
+                  <span className="cmdk-shortcut">/logout</span>
                 </Command.Item>
               )}
               <Command.Item value="add todo" onSelect={() => setInput("/todo ")}>
@@ -378,6 +465,7 @@ export default function CommandPalette({ onAddTodo, cameraEnabled, onCameraToggl
               }}>
                 <span className="cmdk-icon">✓</span>
                 Clear completed todos
+                <span className="cmdk-shortcut">/clear</span>
               </Command.Item>
               <Command.Item value="open display" onSelect={() => { window.location.href = "/display"; close(); }}>
                 <span className="cmdk-icon">▣</span>
