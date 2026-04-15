@@ -120,11 +120,14 @@ export default function Page() {
     };
   }, []);
 
-  // Show display mode after idle (threshold configurable via sp_display_idle localStorage, default 10 min)
+  // Show display mode after idle — DISABLED at night (6pm-9am)
   useEffect(() => {
     const raw = typeof window !== "undefined" ? localStorage.getItem("sp_display_idle") : null;
     const DISPLAY_IDLE_MS = raw ? Number(raw) * 60_000 : 10 * 60 * 1000;
     const id = setInterval(() => {
+      const hour = new Date().getHours();
+      const isNightTime = hour >= 18 || hour < 9; // 6pm to 9am
+      if (isNightTime) return; // Don't show display mode at night
       if (Date.now() - lastActivityRef.current > DISPLAY_IDLE_MS) setShowDisplay(true);
     }, 30_000);
     return () => clearInterval(id);

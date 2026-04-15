@@ -11,6 +11,7 @@ const MOTION_MIN_PCT   = 0.04;
 const CAPTURE_COOLDOWN = 8_000;
 const MATCH_THRESHOLD  = 0.55;
 const DESCRIPTORS_KEY  = "face_descriptors";
+const MOTION_UPLOAD_DELAY = 30_000; // Upload motion-only after 30s if no face detected
 
 // 10 seconds of 1-second chunks = 10 chunks pre-event
 const PRE_BUFFER_CHUNKS  = 10;
@@ -44,10 +45,12 @@ async function extractWebMMetadata(headerBlob: Blob): Promise<Blob> {
 function captureJpeg(video: HTMLVideoElement, canvas: HTMLCanvasElement): string | null {
   const ctx = canvas.getContext("2d");
   if (!ctx) return null;
-  canvas.width  = video.videoWidth  || 320;
-  canvas.height = video.videoHeight || 240;
-  ctx.drawImage(video, 0, 0);
-  return canvas.toDataURL("image/jpeg", 0.7);
+  // Smaller resolution for faster uploads (160x120 instead of 320x240 = 75% less data)
+  canvas.width  = 160;
+  canvas.height = 120;
+  ctx.drawImage(video, 0, 0, 160, 120);
+  // More aggressive compression (0.5 instead of 0.7 = ~50% smaller files)
+  return canvas.toDataURL("image/jpeg", 0.5);
 }
 
 function loadStoredDescriptors(): { label: string; descriptors: Float32Array[] }[] {
@@ -77,6 +80,51 @@ function saveDescriptor(label: string, descriptor: Float32Array) {
   ));
 }
 
+// Store visitor image locally in IndexedDB
+async function storeVisitorLocally(imageData: string, faceLabel: string, timestamp: number) {
+  const dbName = "visitors_db";
+  const storeName = "captures";
+
+  return new Promise<void>((resolve, reject) => {
+    const req = indexedDB.open(dbName, 1);
+
+    req.onerror = () => reject(req.error);
+    req.onsuccess = () => {
+      const db = req.result;
+      const tx = db.transaction(storeName, "readwrite");
+      const store = tx.objectStore(storeName);
+
+      store.add({
+        id: crypto.randomUUID(),
+        timestamp,
+        faceLabel,
+        imageData,
+      });
+
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    };
+
+    req.onupgradeneeded = (e) => {
+      const db = (e.target as IDBOpenDBRequest).result;
+      if (!db.objectStoreNames.contains(storeName)) {
+        const store = db.createObjectStore(storeName, { keyPath: "id" });
+        store.createIndex("timestamp", "timestamp", { unique: false });
+        store.createIndex("faceLabel", "faceLabel", { unique: false });
+      }
+    };
+  });
+}
+
+// Upload to cloud for multi-device access
+async function uploadToCloud(imageData: string, faceLabel: string) {
+  return fetch("/api/visitors/capture", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ imageData, faceLabel }),
+  });
+}
+
 export default function CameraMonitor({ enabled = true }: { enabled?: boolean }) {
   const { authenticated } = useAuth();
   const videoRef      = useRef<HTMLVideoElement>(null);
@@ -85,6 +133,8 @@ export default function CameraMonitor({ enabled = true }: { enabled?: boolean })
   const streamRef     = useRef<MediaStream | null>(null);
   const modelLoaded   = useRef(false);
   const lastCapture   = useRef(0);
+  const pendingMotionRef = useRef<{ imageData: string; timestamp: number } | null>(null);
+  const lastFaceTimeRef  = useRef(Date.now());
 
   // Clip buffering refs
   const recorderRef        = useRef<MediaRecorder | null>(null);
@@ -209,11 +259,35 @@ export default function CameraMonitor({ enabled = true }: { enabled?: boolean })
           .withFaceLandmarks()
           .withFaceDescriptors();
 
+        const imageData = captureJpeg(video, canvasRef.current);
+        if (!imageData) return;
+
         let label: string;
 
         if (detections.length === 0) {
+          // Motion without face - queue for delayed upload
+          lastFaceTimeRef.current = now;
+          pendingMotionRef.current = { imageData, timestamp: now };
           label = "motion";
-        } else {
+
+          // Upload after 30s if no face detected in the meantime
+          setTimeout(() => {
+            const pending = pendingMotionRef.current;
+            if (pending && pending.timestamp === now && Date.now() - lastFaceTimeRef.current >= MOTION_UPLOAD_DELAY) {
+              storeVisitorLocally(pending.imageData, "motion", pending.timestamp).catch(() => {});
+              uploadToCloud(pending.imageData, "motion").catch(() => {});
+              pendingMotionRef.current = null;
+            }
+          }, MOTION_UPLOAD_DELAY);
+
+          return;
+        }
+
+        // Face detected - cancel any pending motion upload and proceed
+        lastFaceTimeRef.current = now;
+        pendingMotionRef.current = null;
+
+        {
           const stored = loadStoredDescriptors();
           if (stored.length > 0) {
             const labeledDescriptors = stored.map(
@@ -236,12 +310,9 @@ export default function CameraMonitor({ enabled = true }: { enabled?: boolean })
           capturingPostRef.current    = true;
         }
 
-        const imageData = captureJpeg(video, canvasRef.current);
-        fetch("/api/visitors/capture", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ imageData, faceLabel: label }),
-        }).catch(() => {});
+        // Store locally AND upload to cloud for multi-device access
+        storeVisitorLocally(imageData, label, now).catch(() => {});
+        uploadToCloud(imageData, label).catch(() => {});
       };
 
       pollId = setInterval(poll, MOTION_POLL_MS);

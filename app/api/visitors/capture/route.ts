@@ -13,7 +13,7 @@ export async function POST(req: Request) {
   const { imageData, faceLabel } = await req.json();
   if (!imageData) return Response.json({ error: "Missing imageData" }, { status: 400 });
 
-  // Convert base64 to buffer
+  // Convert base64 to buffer (smaller images now = less CPU)
   const base64 = imageData.replace(/^data:image\/\w+;base64,/, "");
   const buffer = Buffer.from(base64, "base64");
 
