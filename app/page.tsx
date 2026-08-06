@@ -29,6 +29,8 @@ const HackerNews       = dynamic(() => import("@/components/HackerNews"),       
 const ThoughtsFeed     = dynamic(() => import("@/components/ThoughtsFeed"),      { ssr: false });
 const DisplayShell     = dynamic(() => import("@/components/display/DisplayShell"), { ssr: false });
 const ExamCountdown    = dynamic(() => import("@/components/ExamCountdown"),        { ssr: false });
+const WeekReview       = dynamic(() => import("@/components/WeekReview"),           { ssr: false });
+const Habits           = dynamic(() => import("@/components/Habits"),               { ssr: false });
 
 type DimLevel = 0 | 25 | 50 | 75 | 90;
 
@@ -269,6 +271,8 @@ export default function Page() {
             <div className="feed-section">
               {modules.examCountdown && <ExamCountdown />}
               {modules.assignments && <Assignments />}
+              <WeekReview />
+              <Habits />
               <ProjectTracker />
               <GitHubPRs />
               <HackerNews />

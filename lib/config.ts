@@ -17,6 +17,11 @@ export const quickLinks: QuickLink[] = [
 
 export const idleTimeoutMs = 3 * 60 * 1000; // 3 minutes
 
+// ── Life areas ─────────────────────────────────────────────────────────────
+// Fallback only. The real list is the Category select options on the Notion
+// projects database — rename them there and this list stops mattering.
+export const lifeAreas = ["Work", "Projects", "Social", "Self"];
+
 // ── Module toggles ─────────────────────────────────────────────────────────
 // Flip to true to bring a module back. Code is kept intact either way, so
 // re-enabling is a one-line change with no other edits needed.

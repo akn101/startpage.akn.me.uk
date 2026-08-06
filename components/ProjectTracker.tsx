@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef } from "react";
 import { useAuth } from "@/context/AuthContext";
+import { lifeAreas } from "@/lib/config";
 
 interface Project {
   id: string;
@@ -68,8 +69,7 @@ function fmtTime(s: number): string {
 
 type TimeMap = Record<string, number>;
 
-const CATEGORIES = ["Dev", "Personal", "School", "Faith", "Music"];
-const COLORS     = ["purple", "blue", "green", "orange", "red"];
+const COLORS = ["purple", "blue", "green", "orange", "red"];
 
 export default function ProjectTracker() {
   const [projects, setProjects]   = useState<Project[]>([]);
@@ -80,7 +80,8 @@ export default function ProjectTracker() {
   const [newTask, setNewTask]       = useState("");
   const [addingProject, setAddingProject] = useState(false);
   const [newProjectName, setNewProjectName]     = useState("");
-  const [newProjectCategory, setNewProjectCategory] = useState("Dev");
+  const [categories, setCategories] = useState<string[]>(lifeAreas);
+  const [newProjectCategory, setNewProjectCategory] = useState(lifeAreas[0]);
   const [newProjectColor, setNewProjectColor]   = useState("purple");
   const { authenticated } = useAuth();
 
@@ -89,9 +90,13 @@ export default function ProjectTracker() {
       Promise.all([
         fetch("/api/tasks").then((r) => r.json()),
         fetch("/api/data/sessions").then((r) => r.json()),
-      ]).then(([{ projects: p, tasks: t }, { sessions: s }]) => {
+      ]).then(([{ projects: p, tasks: t, categories: c }, { sessions: s }]) => {
         setProjects(p ?? []);
         setTasks(t ?? []);
+        if (Array.isArray(c) && c.length > 0) {
+          setCategories(c);
+          setNewProjectCategory((cur) => (c.includes(cur) ? cur : c[0]));
+        }
         const weekStart = new Date();
         weekStart.setDate(weekStart.getDate() - ((weekStart.getDay() + 6) % 7));
         weekStart.setHours(0, 0, 0, 0);
@@ -192,7 +197,7 @@ export default function ProjectTracker() {
             onKeyDown={(e) => { if (e.key === "Enter") submitProject(); if (e.key === "Escape") setAddingProject(false); }}
           />
           <select aria-label="Category" className="project-add-select" value={newProjectCategory} onChange={(e) => setNewProjectCategory(e.target.value)}>
-            {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+            {categories.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
           <select aria-label="Color" className="project-add-select" value={newProjectColor} onChange={(e) => setNewProjectColor(e.target.value)}>
             {COLORS.map((c) => <option key={c} value={c}>{c}</option>)}

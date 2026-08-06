@@ -2201,3 +2201,46 @@ a.status-admin-meta:hover { color: rgba(0,0,0,0.6); text-decoration: underline; 
 .status-admin-form button { align-self: flex-start; background: rgba(102,126,234,0.12); color: #4f46e5; border: 1px solid rgba(102,126,234,0.25); border-radius: 8px; padding: 8px 20px; font-size: 13px; cursor: pointer; font-family: inherit; }
 .status-admin-form button:hover:not(:disabled) { background: rgba(102,126,234,0.2); }
 .status-admin-form button:disabled { opacity: 0.4; cursor: default; }
+
+/* ── Week review ───────────────────────────────────────────────────────── */
+.week-total { margin-left: auto; font-size: 0.62rem; color: rgba(255,255,255,0.35); font-weight: 400; letter-spacing: 0; }
+.week-areas { display: flex; flex-direction: column; gap: 0.5rem; }
+.week-area { display: flex; flex-direction: column; gap: 0.22rem; }
+.week-area-row { display: flex; align-items: baseline; gap: 0.5rem; }
+.week-area-name { font-size: 0.72rem; color: rgba(255,255,255,0.8); }
+.week-area-time { margin-left: auto; font-size: 0.62rem; color: rgba(255,255,255,0.35); white-space: nowrap; }
+.week-bar-track { height: 3px; border-radius: 2px; background: rgba(255,255,255,0.07); overflow: hidden; }
+.week-bar-fill { height: 100%; border-radius: 2px; opacity: 0.75; transition: width 0.5s ease; }
+.week-untracked { font-size: 0.6rem; color: rgba(255,255,255,0.25); margin-top: 0.1rem; }
+.week-untouched { margin-top: 0.7rem; padding-top: 0.6rem; border-top: 1px solid rgba(255,255,255,0.06); }
+.week-untouched-label { font-size: 0.58rem; text-transform: uppercase; letter-spacing: 0.08em; color: rgba(255,255,255,0.25); margin-bottom: 0.35rem; }
+.week-untouched-list { display: flex; flex-wrap: wrap; gap: 0.28rem; }
+.week-chip {
+  font-size: 0.62rem; padding: 0.12rem 0.4rem; border-radius: 10px;
+  color: var(--chip, #9678ff); border: 1px solid var(--chip, #9678ff);
+  opacity: 0.45; white-space: nowrap;
+}
+.week-chip.more { color: rgba(255,255,255,0.4); border-color: rgba(255,255,255,0.15); }
+
+/* ── Habits ────────────────────────────────────────────────────────────── */
+.habits-list { display: flex; flex-direction: column; gap: 0.4rem; }
+.habit-row { display: flex; align-items: center; gap: 0.5rem; }
+.habit-check {
+  width: 14px; height: 14px; border-radius: 4px; flex-shrink: 0; cursor: pointer;
+  border: 1.5px solid rgba(255,255,255,0.22); background: transparent; padding: 0;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.habit-check:hover { border-color: rgba(255,255,255,0.45); }
+.habit-check.done { background: #4ade80; border-color: #4ade80; }
+.habit-name { font-size: 0.75rem; color: rgba(255,255,255,0.72); }
+.habit-row.done .habit-name { color: rgba(255,255,255,0.92); }
+.habit-streak { margin-left: auto; font-size: 0.62rem; color: rgba(255,255,255,0.3); white-space: nowrap; }
+.habit-streak.hot { color: #fb923c; opacity: 0.85; }
+.habit-week { display: flex; gap: 2px; margin-left: 0.4rem; }
+.habit-dot { width: 5px; height: 5px; border-radius: 50%; background: rgba(255,255,255,0.1); }
+.habit-dot.on { background: #4ade80; opacity: 0.75; }
+.habit-delete {
+  background: none; border: none; padding: 0 0 0 0.3rem; cursor: pointer;
+  color: rgba(255,255,255,0.18); font-size: 0.7rem; line-height: 1;
+}
+.habit-delete:hover { color: rgba(248,113,113,0.8); }

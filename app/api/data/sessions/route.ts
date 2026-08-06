@@ -1,5 +1,6 @@
 import { db } from "@/lib/supabase-server";
 import { getUid, requireUid } from "@/lib/auth";
+import { modules } from "@/lib/config";
 import AnthropicBedrock from "@anthropic-ai/bedrock-sdk";
 
 const bedrock = new AnthropicBedrock({
@@ -34,6 +35,7 @@ async function fetchProjects(): Promise<string[]> {
 
 // Fetch active assignment subjects from Notion
 async function fetchAssignmentSubjects(): Promise<string[]> {
+  if (!modules.assignments) return [];
   const token = process.env.NOTION_TOKEN;
   const db_id = process.env.NOTION_DATABASE_ID_ASSIGNMENTS;
   if (!token || !db_id) return [];

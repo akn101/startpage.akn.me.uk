@@ -42,12 +42,29 @@ function getRichText(properties: Record<string, unknown>, key: string): string {
   return (prop?.rich_text ?? []).map((t) => t.plain_text).join("");
 }
 
+// The Category select options as defined on the projects database, so the UI
+// offers exactly the life areas that exist in Notion rather than a copy that
+// drifts out of date.
+async function fetchCategoryOptions(): Promise<string[]> {
+  try {
+    const res = await notionFetch(`/databases/${PROJECTS_DB}`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    const prop = data.properties?.Category as { select?: { options?: { name: string }[] } } | undefined;
+    return (prop?.select?.options ?? []).map((o) => o.name).filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
 export async function GET() {
   if (!NOTION_TOKEN || !PROJECTS_DB || !TASKS_DB) {
-    return Response.json({ projects: [], tasks: [] });
+    return Response.json({ projects: [], tasks: [], categories: [] });
   }
 
   const authed = await isAuthenticated();
+
+  const categoriesPromise = fetchCategoryOptions();
 
   const [projRes, taskRes] = await Promise.all([
     notionFetch(`/databases/${PROJECTS_DB}/query`, {
@@ -89,7 +106,7 @@ export async function GET() {
   const projects = authed ? allProjects : allProjects.filter((p: { is_public: boolean }) => p.is_public);
   const tasks    = authed ? allTasks    : allTasks.filter((t: { is_public: boolean }) => t.is_public);
 
-  return Response.json({ projects, tasks });
+  return Response.json({ projects, tasks, categories: await categoriesPromise });
 }
 
 export async function POST(req: Request) {
