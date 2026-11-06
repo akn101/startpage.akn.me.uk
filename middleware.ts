@@ -25,6 +25,8 @@ export async function middleware(req: NextRequest) {
     pathname.startsWith("/access") ||
     pathname.startsWith("/api/auth") ||
     pathname.startsWith("/api/notify") ||
+    pathname.startsWith("/api/aknclient/") || // own service-key auth in each route
+
     pathname.startsWith("/api/notifications")
   ) {
     return NextResponse.next();

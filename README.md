@@ -79,6 +79,25 @@ Required env vars:
 | `CALDAV_PASSWORD` | CalDAV password |
 | `STARTPAGE_COOKIE_SECRET` | Password for the `/access` page |
 | `GITHUB_TOKEN` | GitHub PAT for PR listing |
+| `AKNCLIENT_API_KEY` | Service key for `/api/aknclient/*` (see below) |
+| `STARTPAGE_OWNER_UID` | Owner uid; aknclient worklog rows and todos are scoped to it |
+
+---
+
+## aknClient service API
+
+The macOS app aknClient syncs through `/api/aknclient/*`. Middleware lets the prefix through; each route authenticates with `Authorization: Bearer <AKNCLIENT_API_KEY>` (constant-time compare). Missing/invalid key: `401` JSON. `AKNCLIENT_API_KEY` unset: `503`. Worklog and todos also need `STARTPAGE_OWNER_UID` (else `503`).
+
+| Route | Behaviour |
+|---|---|
+| `POST /api/aknclient/worklog` | Body `{blocks:[{id,label,project\|null,started_at,ended_at,duration_s}], range?:{from,to}}` (ISO-8601). Upserts into `time_sessions` keyed on `(source='aknclient', external_id=id)` as `is_public=false` owner rows, so they count in "This week" and project time. With `range`, deletes `source='aknclient'` rows with `started_at` in `[from,to)` whose id is not in the payload; rows from any other source are never touched. Returns `{upserted, deleted}`. Needs migration `005_time_sessions_external_id.sql`. |
+| `GET /api/aknclient/todos` | `{todos:[{id,text,done,is_public}]}`, all of the owner's, private included. |
+| `PATCH /api/aknclient/todos` | `{id, done}` returns the updated todo (`404` if not the owner's). |
+| `GET /api/aknclient/tasks` | Same JSON as `GET /api/tasks`, private rows included. |
+| `GET /api/aknclient/calendar?days=7` | Same JSON as `GET /api/integrations/calendar` (`days` 1-31, up to 100 events). |
+| `POST /api/aknclient/notify` | `{title, body}` stored like `/api/notify` with `source:'aknclient'`. |
+
+Tests: `npm test` (vitest, in-memory Supabase fake).
 
 ---
 
@@ -86,7 +105,7 @@ Required env vars:
 
 ```sql
 todos        (id, text, done, is_public, created_at)
-time_sessions (id, label, duration_s, project, started_at, ended_at, is_public, created_at)
+time_sessions (id, label, duration_s, project, started_at, ended_at, is_public, source, external_id, created_at)
 alarms       (id, time, label, enabled, created_at)
 visitors     (id, captured_at, image_path, face_label)
 photos       (id, url, caption, is_public, created_at)
