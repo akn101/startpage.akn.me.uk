@@ -8,7 +8,7 @@ export async function GET(req: NextRequest) {
   const hasSession = cookieHeader.includes('__session=');
 
   if (!hasSession) {
-    const callbackUrl = new URL('/auth/callback', req.url).toString();
+    const callbackUrl = new URL('/api/auth/callback', req.url).toString();
     return NextResponse.redirect(`https://id.akn.me.uk?redirect=${encodeURIComponent(callbackUrl)}`);
   }
 
@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
     });
 
     if (!r.ok) {
-      const callbackUrl = new URL('/auth/callback', req.url).toString();
+      const callbackUrl = new URL('/api/auth/callback', req.url).toString();
       return NextResponse.redirect(`https://id.akn.me.uk?redirect=${encodeURIComponent(callbackUrl)}`);
     }
 
@@ -65,7 +65,7 @@ export async function GET(req: NextRequest) {
 
     return res;
   } catch {
-    const callbackUrl = new URL('/auth/callback', req.url).toString();
+    const callbackUrl = new URL('/api/auth/callback', req.url).toString();
     return NextResponse.redirect(`https://id.akn.me.uk?redirect=${encodeURIComponent(callbackUrl)}`);
   }
 }
