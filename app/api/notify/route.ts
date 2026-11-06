@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/lib/supabase-server";
+import { normaliseSource, storeNotification } from "@/lib/notify";
 
 export async function POST(req: NextRequest) {
   const apiKey = req.headers.get("x-api-key");
@@ -18,14 +18,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "title and body are required" }, { status: 400 });
   }
 
-  const source =
-    body.source === "android" || body.source === "openclaw" ? body.source : "other";
-
-  const { data, error } = await db
-    .from("notifications")
-    .insert({ title: body.title, body: body.body, source })
-    .select("id")
-    .single();
+  const { data, error } = await storeNotification({
+    title: body.title,
+    body: body.body,
+    source: normaliseSource(body.source),
+  });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 

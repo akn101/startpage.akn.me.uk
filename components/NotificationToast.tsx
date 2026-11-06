@@ -5,6 +5,7 @@ import { NotificationPayload } from "@/lib/notifications";
 const SOURCE_CONFIG = {
   android: { label: "Android", color: "#7ec8a0", icon: "📱" },
   openclaw: { label: "openclaw", color: "#b48eff", icon: "🤖" },
+  aknclient: { label: "aknClient", color: "#ffc88a", icon: "💻" },
   other:    { label: "notify",   color: "#88c8ff", icon: "🔔" },
 };
 

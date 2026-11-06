@@ -1,12 +1,10 @@
 import { db } from "@/lib/supabase-server";
 import { getUid, requireUid } from "@/lib/auth";
+import { listTodos } from "@/lib/todos";
 
 export async function GET() {
   const uid = await getUid();
-  let query = db.from("todos").select("id, text, done, is_public").order("created_at", { ascending: true });
-  if (uid) query = query.eq("user_id", uid);
-  else query = query.eq("is_public", true);
-  const { data, error } = await query;
+  const { data, error } = await listTodos(uid);
   if (error) return Response.json({ error: error.message }, { status: 500 });
   return Response.json({ todos: data ?? [] });
 }

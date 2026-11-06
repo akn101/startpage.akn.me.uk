@@ -2,6 +2,6 @@ export interface NotificationPayload {
   id: string;
   title: string;
   body: string;
-  source: "android" | "openclaw" | "other";
+  source: "android" | "openclaw" | "aknclient" | "other";
   timestamp: number;
 }
