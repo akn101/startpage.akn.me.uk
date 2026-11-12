@@ -73,6 +73,23 @@ export default function TvMode() {
     };
   }, [tv, locked, relock]);
 
+  // Leaving the TV app (home button, input switch) relocks at once; coming
+  // back reloads so the PIN pad shows. Works in any engine, no app hook needed.
+  useEffect(() => {
+    if (!tv) return;
+    const onVis = () => {
+      if (document.visibilityState === "hidden") {
+        if (!navigator.sendBeacon?.("/api/lock/lock")) {
+          fetch("/api/lock/lock", { method: "POST", keepalive: true, cache: "no-store" }).catch(() => {});
+        }
+      } else if (!locked) {
+        window.location.reload();
+      }
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
+  }, [tv, locked]);
+
   // Hot reload on new deploy (dev servers hot-reload by themselves).
   useEffect(() => {
     if (!tv) return;

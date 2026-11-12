@@ -150,7 +150,7 @@ export default function Screensaver() {
   return (
     <canvas
       ref={canvasRef}
-      className="fixed inset-0 w-full h-full"
+      className="fixed top-0 left-0 w-full h-full"
       style={{ display: "block", zIndex: 0 }}
     />
   );
