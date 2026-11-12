@@ -2201,3 +2201,56 @@ a.status-admin-meta:hover { color: rgba(0,0,0,0.6); text-decoration: underline; 
 .status-admin-form button { align-self: flex-start; background: rgba(102,126,234,0.12); color: #4f46e5; border: 1px solid rgba(102,126,234,0.25); border-radius: 8px; padding: 8px 20px; font-size: 13px; cursor: pointer; font-family: inherit; }
 .status-admin-form button:hover:not(:disabled) { background: rgba(102,126,234,0.2); }
 .status-admin-form button:disabled { opacity: 0.4; cursor: default; }
+
+/* ── PIN pad (TV lock + sensitive PinGate) ───────────────────────────── */
+.pin-overlay {
+  position: fixed; inset: 0; z-index: 10000; display: flex; align-items: center; justify-content: center;
+  background: rgba(6, 6, 15, 0.97); backdrop-filter: blur(12px);
+}
+.pin-inline { display: flex; justify-content: center; padding: 0.5rem 0; }
+.pin-card { padding: 2rem 2.25rem; text-align: center; min-width: 300px; }
+.pin-title { font-size: 0.95rem; letter-spacing: 0.08em; text-transform: uppercase; color: rgba(255,255,255,0.7); }
+.pin-dots { display: flex; gap: 0.6rem; justify-content: center; margin: 1.25rem 0 0.5rem; }
+.pin-dots span { width: 12px; height: 12px; border-radius: 50%; border: 2px solid rgba(150,120,255,0.6); }
+.pin-dots span.on { background: rgba(150,120,255,0.95); }
+.pin-msg { min-height: 1.3em; font-size: 0.8rem; color: #ff9b9b; margin-bottom: 1rem; }
+.pin-grid { display: grid; grid-template-columns: repeat(3, 64px); gap: 0.6rem; justify-content: center; }
+.pin-key {
+  height: 56px; border-radius: 12px; font: inherit; font-size: 1.25rem; color: #fff; cursor: pointer;
+  background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12);
+}
+.pin-key:focus, .pin-key:hover { background: rgba(150,120,255,0.25); border-color: rgba(150,120,255,0.8); outline: none; }
+.pin-key.ok { background: rgba(150,120,255,0.35); font-size: 0.95rem; }
+.pin-key:disabled { opacity: 0.35; cursor: default; }
+.pin-cancel { margin-top: 1rem; background: none; border: none; color: rgba(255,255,255,0.5); font: inherit; cursor: pointer; }
+.pin-gate-btn { width: 100%; padding: 0.9rem; font: inherit; color: rgba(255,255,255,0.75); cursor: pointer; border: none; }
+html.tv .pin-grid { grid-template-columns: repeat(3, 96px); }
+html.tv .pin-key { height: 80px; font-size: 1.6rem; }
+
+/* ── Mind panel ── */
+.mind-widget { padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; min-width: 260px; }
+.mind-header { font-weight: 600; opacity: .9; }
+.mind-add { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.mind-add input { flex: 1 1 140px; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.12); border-radius: 8px; padding: 6px 8px; color: inherit; }
+.mind-add button[type=submit] { padding: 6px 12px; border-radius: 8px; background: rgba(124,196,255,.2); border: 1px solid rgba(124,196,255,.4); color: inherit; }
+.mind-add button[type=submit]:disabled { opacity: .4; }
+.mind-kinds { display: flex; gap: 4px; width: 100%; }
+.mind-kinds button { flex: 1; padding: 4px 6px; border-radius: 6px; background: transparent; border: 1px solid rgba(255,255,255,.12); color: inherit; opacity: .7; }
+.mind-kinds button.active { opacity: 1; background: rgba(255,255,255,.1); }
+.mind-preview { font-size: .8em; opacity: .75; width: 100%; }
+.mind-section h4 { margin: 4px 0; font-size: .75em; text-transform: uppercase; letter-spacing: .06em; opacity: .6; }
+.mind-section ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.mind-section li { display: flex; gap: 8px; align-items: baseline; }
+.mind-section li.overdue .mind-text em { color: #ff9b8a; }
+.mind-text { flex: 1; }
+.mind-text em { opacity: .6; font-style: normal; font-size: .85em; }
+.mind-check, .mind-del { background: none; border: none; color: inherit; opacity: .5; cursor: pointer; padding: 0 2px; }
+.mind-check:hover, .mind-del:hover { opacity: 1; }
+.mind-empty, .mind-error { font-size: .85em; opacity: .7; margin: 0; }
+.mind-error { color: #ff9b8a; opacity: 1; }
+.mind-header { display: flex; justify-content: space-between; align-items: center; }
+.mind-brief-btn { background: rgba(255,214,102,.15); border: 1px solid rgba(255,214,102,.4); border-radius: 8px; padding: 3px 10px; color: inherit; cursor: pointer; }
+.mind-brief { background: rgba(255,255,255,.04); border-radius: 10px; padding: 10px 12px; }
+.mind-brief pre { white-space: pre-wrap; font: inherit; margin: 0 0 6px; line-height: 1.45; }
+.mind-brief small { opacity: .55; }
+.mind-brief small button { background: none; border: none; color: inherit; text-decoration: underline; cursor: pointer; padding: 0; }

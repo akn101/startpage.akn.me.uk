@@ -3,13 +3,21 @@ const withPWA = require("next-pwa")({
   disable: process.env.NODE_ENV === "development",
   register: true,
   skipWaiting: true,
+  // Default caches minus "apis": private API JSON must never be stored offline.
+  runtimeCaching: require("next-pwa/cache").filter((c) => c.options?.cacheName !== "apis"),
 });
+
+const isDev = process.env.NODE_ENV === "development";
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
   async headers() {
     return [
+      {
+        source: "/api/:path*",
+        headers: [{ key: "Cache-Control", value: "no-store, private" }],
+      },
       {
         source: "/(.*)",
         headers: [
@@ -25,7 +33,7 @@ const nextConfig = {
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               "font-src 'self' https://fonts.gstatic.com",
               "img-src 'self' data: blob: https:",
-              "connect-src 'self' https://*.supabase.co https://api.notion.com https://api.github.com https://wttr.in https://api.akn.me.uk https://hacker-news.firebaseio.com https://thoughts.akn.me.uk https://ipapi.co https://api.open-meteo.com",
+              `connect-src 'self'${isDev ? " ws: wss:" : ""} https://*.supabase.co https://api.notion.com https://api.github.com https://wttr.in https://api.akn.me.uk https://hacker-news.firebaseio.com https://thoughts.akn.me.uk https://ipapi.co https://api.open-meteo.com`,
               "worker-src 'self' blob:",
               "frame-ancestors 'none'",
             ].join("; "),

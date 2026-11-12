@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { signSession, SESSION_COOKIE, TTL_SECONDS } from '@/lib/session';
+import { isTvUserAgent } from '@/lib/lock';
 
 const API = 'https://api.akn.me.uk';
 
@@ -45,6 +46,7 @@ export async function GET(req: NextRequest) {
       displayName: null,
       role: user.role ?? 'user',
       projects: user.projects ?? [],
+      ...(isTvUserAgent(req.headers.get('user-agent')) ? { device: 'tv' as const } : {}),
     });
 
     const res = NextResponse.redirect(new URL('/', req.url));

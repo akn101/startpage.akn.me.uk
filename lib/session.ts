@@ -6,6 +6,10 @@ export interface SessionData {
   displayName: string | null;
   role: string;
   projects: string[];
+  /** Random per-sign-in id; PIN unlocks are bound to it. */
+  sid?: string;
+  /** "tv" when signed in from the Startpage TV app: private data needs the PIN. */
+  device?: "tv";
 }
 
 export const SESSION_COOKIE = 'sp_session';
@@ -18,7 +22,7 @@ function secret() {
 }
 
 export async function signSession(data: SessionData): Promise<string> {
-  return new SignJWT({ ...data })
+  return new SignJWT({ ...data, sid: data.sid ?? crypto.randomUUID() })
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
     .setExpirationTime(`${TTL_SECONDS}s`)

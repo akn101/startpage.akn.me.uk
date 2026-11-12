@@ -27,6 +27,7 @@ const MiniClock        = dynamic(() => import("@/components/MiniClock"),        
 const Assignments      = dynamic(() => import("@/components/Assignments"),       { ssr: false });
 const HackerNews       = dynamic(() => import("@/components/HackerNews"),        { ssr: false });
 const ThoughtsFeed     = dynamic(() => import("@/components/ThoughtsFeed"),      { ssr: false });
+const Mind             = dynamic(() => import("@/components/Mind"),              { ssr: false });
 const DisplayShell     = dynamic(() => import("@/components/display/DisplayShell"), { ssr: false });
 const ExamCountdown    = dynamic(() => import("@/components/ExamCountdown"),        { ssr: false });
 
@@ -269,6 +270,7 @@ export default function Page() {
             <div className="feed-section">
               {modules.examCountdown && <ExamCountdown />}
               {modules.assignments && <Assignments />}
+              <Mind />
               <ProjectTracker />
               <GitHubPRs />
               <HackerNews />
