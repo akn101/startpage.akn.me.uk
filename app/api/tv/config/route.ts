@@ -1,6 +1,6 @@
 import { getRawSession, hasAccess, isUnlocked, NO_STORE, requestDevice } from "@/lib/auth";
 import { isTvSession, isTvUserAgent, pinApplies, pinConfigured } from "@/lib/lock";
-import { tvModules, type TvProfile } from "@/lib/tv-config";
+import { tvLocation, tvModules, type TvProfile } from "@/lib/tv-config";
 
 export const dynamic = "force-dynamic";
 
@@ -26,6 +26,7 @@ export async function GET() {
       profile,
       modules,
       pinConfigured: pinApplies(s, ua),
+      location: tvLocation(),
       ...(profile === "owner" && s?.displayName ? { displayName: s.displayName } : {}),
     },
     { headers: NO_STORE },

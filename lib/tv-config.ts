@@ -34,3 +34,18 @@ export function tvDeviceAllowed(device: string | null, env = process.env.STARTPA
 
 /** Short, log-safe form of a device id. */
 export const deviceTag = (d: string | null) => (d ? d.replace(/[^\w.-]/g, "").slice(0, 16) || "?" : "-");
+
+export type TvLocation = { lat: number; lon: number; name: string };
+
+/** Where the TV is, for weather/clock (its IP geolocates wrongly over VPN). STARTPAGE_TV_LOCATION='{"lat":..,"lon":..,"name":".."}'. */
+export function tvLocation(env = process.env.STARTPAGE_TV_LOCATION): TvLocation | null {
+  if (!env) return null;
+  try {
+    const o = JSON.parse(env) as Partial<TvLocation>;
+    const lat = Number(o.lat), lon = Number(o.lon);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) return null;
+    return { lat, lon, name: typeof o.name === "string" ? o.name.slice(0, 60) : "" };
+  } catch {
+    return null;
+  }
+}

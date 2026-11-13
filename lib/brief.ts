@@ -65,9 +65,9 @@ Plain text with short bullet lines (•). Under 160 words. No preamble, no sign-
 export function bedrockClient(): AnthropicBedrock | null {
   if (!process.env.AWS_ACCESS_KEY_ID || !process.env.AWS_SECRET_ACCESS_KEY) return null;
   return new AnthropicBedrock({
-    awsAccessKey: process.env.AWS_ACCESS_KEY_ID,
-    awsSecretKey: process.env.AWS_SECRET_ACCESS_KEY,
-    awsRegion: process.env.AWS_REGION ?? "eu-west-1",
+    awsAccessKey: process.env.AWS_ACCESS_KEY_ID.trim(),
+    awsSecretKey: process.env.AWS_SECRET_ACCESS_KEY.trim(),
+    awsRegion: (process.env.AWS_REGION ?? "").replace(/\\n/g, "").trim() || "eu-west-1",
   });
 }
 export const bedrockModel = () => process.env.BRIEF_MODEL ?? "eu.anthropic.claude-3-haiku-20240307-v1:0";

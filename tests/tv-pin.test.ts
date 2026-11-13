@@ -72,7 +72,7 @@ describe("GET /api/tv/config", () => {
   it("guest for anyone, owner once the TV is PIN-unlocked", async () => {
     const { GET } = await import("@/app/api/tv/config/route");
     hdrs.set("user-agent", TV_UA);
-    expect(await (await GET()).json()).toEqual({ profile: "guest", modules: ["clock", "weather"], pinConfigured: true });
+    expect(await (await GET()).json()).toEqual({ profile: "guest", modules: ["clock", "weather"], pinConfigured: true, location: null });
     const s = await signIn("tv");
     expect((await (await GET()).json()).profile).toBe("guest");
     await unlock(s, "private");
@@ -213,5 +213,21 @@ describe("owner routes accept the private unlock on the TV", () => {
     await unlock(s, "private");
     expect(await requireOwner()).toEqual({ uid: "owner-uid" });
     expect(((await requireSensitive()) as Response).status).toBe(423); // sensitive unchanged
+  });
+});
+
+describe("tv location + speak", () => {
+  it("parses STARTPAGE_TV_LOCATION and rejects junk", async () => {
+    const { tvLocation } = await import("@/lib/tv-config");
+    expect(tvLocation('{"lat":22.543,"lon":114.058,"name":"Shenzhen"}')).toEqual({ lat: 22.543, lon: 114.058, name: "Shenzhen" });
+    expect(tvLocation('{"lat":200,"lon":0}')).toBeNull();
+    expect(tvLocation("nope")).toBeNull();
+  });
+  it("speak: 401 signed out, 400 empty text", async () => {
+    const { POST } = await import("@/app/api/ai/speak/route");
+    const post = (b: unknown) => new NextRequest("http://t/api/ai/speak", { method: "POST", body: JSON.stringify(b) });
+    expect((await POST(post({ text: "hi" }))).status).toBe(401);
+    await signIn();
+    expect((await POST(post({ text: "  " }))).status).toBe(400);
   });
 });
