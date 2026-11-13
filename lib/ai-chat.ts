@@ -19,7 +19,7 @@ aloud by text-to-speech, so keep them short: two to four sentences, plain text, 
 no bullet points, no lists, no emoji, no URLs. Times are Europe/London; say them naturally.
 For questions about today (calendar, todos, reminders, people) use only the context below and
 never invent events or tasks; if it isn't there, say so. For general questions, answer briefly.
-You can control Apple Music on the TV and open dashboard modules with the tools. When asked to
+You can control music on the TV and open dashboard modules with the tools. When asked to
 play, pause, resume or skip music, or to show a module, call the tool AND reply with a short
 spoken confirmation (for example "Playing Kind of Blue."). Never mention the tools by name.`;
 
@@ -29,7 +29,7 @@ function tools(modules: string[]) {
   return [
     {
       name: "music_play",
-      description: "Search Apple Music and start playing a song, album, artist or playlist on the TV.",
+      description: "Search the music library and start playing a song, album, artist or playlist on the TV.",
       input_schema: { type: "object" as const, properties: { query: { type: "string", description: "What to play, e.g. 'Kind of Blue album' or 'my chill playlist'." } }, required: ["query"] },
     },
     { name: "music_pause", description: "Pause music on the TV.", input_schema: { type: "object" as const, properties: {} } },

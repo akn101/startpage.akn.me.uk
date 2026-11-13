@@ -72,7 +72,7 @@ describe("GET /api/tv/config", () => {
   it("guest for anyone, owner once the TV is PIN-unlocked", async () => {
     const { GET } = await import("@/app/api/tv/config/route");
     hdrs.set("user-agent", TV_UA);
-    expect(await (await GET()).json()).toEqual({ profile: "guest", modules: ["clock", "weather"], pinConfigured: true, location: null });
+    expect(await (await GET()).json()).toEqual({ profile: "guest", modules: ["clock", "weather"], pinConfigured: true, location: null, music: { backend: null } });
     const s = await signIn("tv");
     expect((await (await GET()).json()).profile).toBe("guest");
     await unlock(s, "private");
@@ -229,5 +229,89 @@ describe("tv location + speak", () => {
     expect((await POST(post({ text: "hi" }))).status).toBe(401);
     await signIn();
     expect((await POST(post({ text: "  " }))).status).toBe(400);
+  });
+});
+
+describe("subsonic fallback", () => {
+  const SUB = { SUBSONIC_URL: "https://music.example.test/", SUBSONIC_USER: "u1", SUBSONIC_PASSWORD: "pw-not-real" };
+  const setSub = () => Object.assign(process.env, SUB);
+  const clearSub = () => { for (const k of Object.keys(SUB)) delete process.env[k]; };
+  const clearApple = () => { for (const k of ["APPLE_MUSIC_TEAM_ID", "APPLE_MUSIC_KEY_ID", "APPLE_MUSIC_PRIVATE_KEY"]) delete process.env[k]; };
+  const ok = (body: unknown) => new Response(JSON.stringify({ "subsonic-response": { status: "ok", ...(body as object) } }), { headers: { "content-type": "application/json" } });
+
+  beforeEach(() => { clearSub(); clearApple(); vi.unstubAllGlobals(); });
+
+  it("token+salt auth: t = md5(password+salt); password never in the URL", async () => {
+    setSub();
+    const { endpoint, authParams } = await import("@/lib/subsonic");
+    const { createHash } = await import("node:crypto");
+    const p = authParams("abc123");
+    expect(p.get("t")).toBe(createHash("md5").update("pw-not-real" + "abc123").digest("hex"));
+    expect(Object.fromEntries(p)).toMatchObject({ u: "u1", s: "abc123", v: "1.16.1", c: "startpage", f: "json" });
+    const url = endpoint("ping");
+    expect(url.startsWith("https://music.example.test/rest/ping.view?")).toBe(true);
+    expect(url).not.toContain("pw-not-real");
+  });
+
+  it("search/random: 401 signed out, 503 unconfigured, proxied track URLs when configured", async () => {
+    const search = (await import("@/app/api/music/subsonic/search/route")).GET;
+    const random = (await import("@/app/api/music/subsonic/random/route")).GET;
+    const req = (q: string) => new NextRequest(`http://t/api/music/subsonic/search?q=${encodeURIComponent(q)}`);
+    expect((await search(req("x"))).status).toBe(401);
+    expect((await random()).status).toBe(401);
+    await signIn();
+    expect((await search(req("x"))).status).toBe(503);
+    setSub();
+    expect((await search(req(" "))).status).toBe(400);
+    const fetchMock = vi.fn(async () => ok({ searchResult3: { song: [
+      { id: "tr-1", title: "So What", artist: "Miles Davis", album: "Kind of Blue", coverArt: "al-9", duration: 562 },
+      { id: "bad id/../x", title: "nope" },
+    ] } }));
+    vi.stubGlobal("fetch", fetchMock);
+    const r = await search(req("kind of blue"));
+    expect(r.status).toBe(200);
+    expect(await r.json()).toEqual([{ id: "tr-1", title: "So What", artist: "Miles Davis", album: "Kind of Blue",
+      coverUrl: "/api/music/subsonic/cover/al-9", streamUrl: "/api/music/subsonic/stream/tr-1", duration: 562 }]);
+    expect(String((fetchMock.mock.calls[0] as unknown[])[0])).toContain("/rest/search3.view?");
+    vi.stubGlobal("fetch", vi.fn(async () => ok({ randomSongs: { song: { id: "tr-2", title: "Solo" } } })));
+    expect((await (await random()).json())[0]).toMatchObject({ id: "tr-2", streamUrl: "/api/music/subsonic/stream/tr-2" });
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ "subsonic-response": { status: "failed", error: { code: 40, message: "Wrong username or password" } } }))));
+    expect((await random()).status).toBe(502);
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(null, { status: 302, headers: { location: "https://id.example.test/" } })));
+    expect((await random()).status).toBe(502);
+  });
+
+  it("stream: passes Range through and returns 206; rejects odd ids; error envelope → 502", async () => {
+    const { GET } = await import("@/app/api/music/subsonic/stream/[id]/route");
+    const req = () => new Request("http://t/api/music/subsonic/stream/tr-1", { headers: { range: "bytes=100-199" } });
+    expect((await GET(req(), { params: { id: "tr-1" } })).status).toBe(401);
+    await signIn(); setSub();
+    expect((await GET(req(), { params: { id: "../etc" } })).status).toBe(400);
+    const fetchMock = vi.fn(async () => new Response(new Uint8Array(100), { status: 206, headers: {
+      "content-type": "audio/mpeg", "content-range": "bytes 100-199/5000", "content-length": "100", "accept-ranges": "bytes" } }));
+    vi.stubGlobal("fetch", fetchMock);
+    const r = await GET(req(), { params: { id: "tr-1" } });
+    expect(r.status).toBe(206);
+    expect(r.headers.get("content-range")).toBe("bytes 100-199/5000");
+    expect(r.headers.get("content-type")).toBe("audio/mpeg");
+    const init = (fetchMock.mock.calls[0] as unknown[])[1] as { headers: Record<string, string> };
+    expect(init.headers.range).toBe("bytes=100-199");
+    vi.stubGlobal("fetch", vi.fn(async () => ok({})));
+    expect((await GET(req(), { params: { id: "tr-1" } })).status).toBe(502);
+  });
+
+  it("tv/config music.backend: apple > subsonic > null; Aria's play action keeps its shape", async () => {
+    const { activeMusicBackend } = await import("@/lib/music-backend");
+    expect(activeMusicBackend()).toBeNull();
+    setSub();
+    expect(activeMusicBackend()).toBe("subsonic");
+    Object.assign(process.env, { APPLE_MUSIC_TEAM_ID: "T", APPLE_MUSIC_KEY_ID: "K", APPLE_MUSIC_PRIVATE_KEY: "P" });
+    expect(activeMusicBackend()).toBe("apple");
+    clearApple();
+    const { GET } = await import("@/app/api/tv/config/route");
+    expect((await (await GET()).json()).music).toEqual({ backend: "subsonic" });
+    const { toAction } = await import("@/lib/ai-chat");
+    expect(toAction("music_play", { query: "jazz" }, ["ask"])).toEqual({ type: "music.play", query: "jazz" });
+    clearSub();
   });
 });

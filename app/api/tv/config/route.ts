@@ -1,6 +1,7 @@
 import { getRawSession, hasAccess, isUnlocked, NO_STORE, requestDevice } from "@/lib/auth";
 import { isTvSession, isTvUserAgent, pinApplies, pinConfigured } from "@/lib/lock";
 import { tvLocation, tvModules, type TvProfile } from "@/lib/tv-config";
+import { activeMusicBackend } from "@/lib/music-backend";
 
 export const dynamic = "force-dynamic";
 
@@ -27,6 +28,8 @@ export async function GET() {
       modules,
       pinConfigured: pinApplies(s, ua),
       location: tvLocation(),
+      // Which player /tv/music uses: "apple" (MusicKit), "subsonic" (our proxy) or null (none set up).
+      music: { backend: activeMusicBackend() },
       ...(profile === "owner" && s?.displayName ? { displayName: s.displayName } : {}),
     },
     { headers: NO_STORE },

@@ -1,13 +1,19 @@
 "use client";
 
-// Apple Music on the TV via MusicKit JS v3, inside the TV app's WebView.
-// The native app drives it through window.spMusic and hears back through
-// window.StartpageTV.onMusicState(json) on every state change.
+// Music on the TV, inside the TV app's WebView. The backend comes from
+// /api/tv/config: "apple" plays through MusicKit JS v3; "subsonic" plays our
+// server-proxied stream URLs in an <audio> element (credentials never reach
+// the TV). Either way the native app drives it through window.spMusic and
+// hears back through window.StartpageTV.onMusicState(json) on every change.
 import { useCallback, useEffect, useRef, useState } from "react";
 
 const MUSICKIT_SRC = "https://js-cdn.music.apple.com/musickit/v3/musickit.js";
 
+type Backend = "apple" | "subsonic" | null;
+type Track = { id: string; title: string; artist: string | null; album: string | null; coverUrl: string | null; streamUrl: string; duration: number | null };
+
 type MusicState = {
+  backend: Backend;
   ready: boolean;
   authorized: boolean;
   playing: boolean;
@@ -22,7 +28,7 @@ type MusicState = {
 };
 
 const EMPTY: MusicState = {
-  ready: false, authorized: false, playing: false, state: "none",
+  backend: null, ready: false, authorized: false, playing: false, state: "none",
   title: null, artist: null, album: null, artwork: null, position: 0, duration: 0, error: null,
 };
 
@@ -60,6 +66,10 @@ function loadMusicKit(): Promise<any> {
 const STATES = ["none", "loading", "playing", "paused", "stopped", "ended", "seeking", "waiting", "stalled", "completed"];
 const fmt = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
 const norm = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+const httpErr = (status: number, what: string) =>
+  status === 423 ? "Enter your PIN first" : status === 503 ? `${what} isn't set up` : status === 401 ? "Sign in first" : `${what} error ${status}`;
+// "play some music", "shuffle", "anything" → random tracks rather than a search.
+const WANTS_RANDOM = /^(some |any |random |my )?(music|songs?|tunes|anything|something|shuffle|random)( please)?$/i;
 
 export default function MusicPlayer() {
   const [st, setSt] = useState<MusicState>(EMPTY);
@@ -139,7 +149,101 @@ export default function MusicPlayer() {
     }
   }, [publish]);
 
+  // ---- Subsonic: our proxy URLs in a plain <audio> element ----
+  const audio = useRef<HTMLAudioElement | null>(null);
+  const queue = useRef<Track[]>([]);
+  const qi = useRef(0);
+
+  const publishAudio = useCallback((patch: Partial<MusicState> = {}) => {
+    const a = audio.current;
+    const t = queue.current[qi.current];
+    const next: MusicState = {
+      ...stRef.current,
+      backend: "subsonic",
+      ready: true,
+      authorized: true,
+      playing: !!a && !a.paused && !a.ended,
+      state: !a || !t ? "none" : a.ended ? "ended" : a.paused ? "paused" : a.readyState < 3 ? "loading" : "playing",
+      title: t?.title ?? null,
+      artist: t?.artist ?? null,
+      album: t?.album ?? null,
+      artwork: t?.coverUrl ?? null,
+      position: Math.round(a?.currentTime ?? 0),
+      duration: Math.round(Number.isFinite(a?.duration) ? a!.duration : t?.duration ?? 0),
+      ...patch,
+    };
+    stRef.current = next;
+    setSt(next);
+    try { window.StartpageTV?.onMusicState?.(JSON.stringify(next)); } catch { /* native bridge gone */ }
+  }, []);
+
+  const playAt = useCallback(async (i: number): Promise<boolean> => {
+    const a = audio.current;
+    const t = queue.current[i];
+    if (!a || !t) return false;
+    qi.current = i;
+    a.src = t.streamUrl;
+    try { await a.play(); publishAudio({ error: null }); return true; }
+    catch (e) { publishAudio({ error: e instanceof Error ? e.message : "Playback failed" }); return false; }
+  }, [publishAudio]);
+
+  const playSubsonic = useCallback(async (query: string): Promise<boolean> => {
+    const q = query.trim();
+    const url = !q || WANTS_RANDOM.test(q) ? "/api/music/subsonic/random" : `/api/music/subsonic/search?q=${encodeURIComponent(q)}`;
+    try {
+      const r = await fetch(url, { cache: "no-store" });
+      if (!r.ok) { publishAudio({ error: httpErr(r.status, "Music library") }); return false; }
+      const list = (await r.json()) as Track[];
+      if (!list.length) { publishAudio({ error: `Nothing found for "${q}"` }); return false; }
+      queue.current = list;
+      return playAt(0);
+    } catch (e) {
+      publishAudio({ error: e instanceof Error ? e.message : "Search failed" });
+      return false;
+    }
+  }, [playAt, publishAudio]);
+
+  const startSubsonic = useCallback(() => {
+    const a = new Audio();
+    a.preload = "auto";
+    audio.current = a;
+    let last = 0;
+    for (const ev of ["play", "pause", "playing", "waiting", "loadedmetadata"]) a.addEventListener(ev, () => publishAudio());
+    a.addEventListener("timeupdate", () => { const now = Date.now(); if (now - last > 1000) { last = now; publishAudio(); } });
+    a.addEventListener("ended", () => { if (qi.current + 1 < queue.current.length) void playAt(qi.current + 1); else publishAudio(); });
+    a.addEventListener("error", () => publishAudio({ error: "Couldn't play this track" }));
+    window.spMusic = {
+      play: playSubsonic,
+      pause: () => { a.pause(); },
+      resume: () => { if (a.src) void a.play(); else void playSubsonic(""); },
+      next: () => { if (qi.current + 1 < queue.current.length) void playAt(qi.current + 1); },
+      prev: () => { if (a.currentTime > 5 || qi.current === 0) a.currentTime = 0; else void playAt(qi.current - 1); },
+      state: () => stRef.current,
+    };
+    publishAudio({ error: null });
+    return () => { a.pause(); a.removeAttribute("src"); a.load(); };
+  }, [playAt, playSubsonic, publishAudio]);
+
   useEffect(() => {
+    let cancelled = false;
+    let stopAudio: (() => void) | null = null;
+    (async () => {
+      let backend: Backend = null;
+      try {
+        const c = await fetch("/api/tv/config", { cache: "no-store" }).then((r) => (r.ok ? r.json() : null));
+        backend = c?.music?.backend ?? null;
+      } catch { /* offline: shows "not set up" below */ }
+      if (cancelled) return;
+      if (backend === "subsonic") { stopAudio = startSubsonic(); return; }
+      if (backend === null) { publish({ backend: null, error: "No music service is set up" }); return; }
+      stopAudio = startApple();
+    })();
+    return () => { cancelled = true; stopAudio?.(); delete window.spMusic; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [startSubsonic]);
+
+  // ---- Apple Music (MusicKit JS v3) ----
+  const startApple = () => {
     let cancelled = false;
     window.spMusic = {
       play,
@@ -152,11 +256,7 @@ export default function MusicPlayer() {
     (async () => {
       try {
         const r = await fetch("/api/music/token", { cache: "no-store" });
-        if (!r.ok) {
-          const err = r.status === 423 ? "Enter your PIN first" : r.status === 503 ? "Apple Music isn't set up" : r.status === 401 ? "Sign in first" : `Token error ${r.status}`;
-          publish({ error: err });
-          return;
-        }
+        if (!r.ok) { publish({ backend: "apple", error: httpErr(r.status, "Apple Music") }); return; }
         const { developerToken } = await r.json();
         const MusicKit = await loadMusicKit();
         if (cancelled) return;
@@ -172,20 +272,20 @@ export default function MusicPlayer() {
           const now = Date.now();
           if (now - last > 1000) { last = now; publish(); }
         });
-        publish({ error: null });
+        publish({ backend: "apple", error: null });
       } catch (e) {
-        publish({ error: e instanceof Error ? e.message : "MusicKit failed" });
+        publish({ backend: "apple", error: e instanceof Error ? e.message : "MusicKit failed" });
       }
     })();
-    return () => { cancelled = true; delete window.spMusic; };
-  }, [play, publish]);
+    return () => { cancelled = true; };
+  };
 
   const pct = st.duration ? Math.min(100, (st.position / st.duration) * 100) : 0;
   return (
     <main className="tvm">
       <style>{CSS}</style>
       {!st.ready ? (
-        <p className="tvm-msg">{st.error ?? "Loading Apple Music…"}</p>
+        <p className="tvm-msg">{st.error ?? "Loading music…"}</p>
       ) : !st.authorized ? (
         <div className="tvm-auth">
           <h1>Apple Music</h1>
@@ -201,6 +301,9 @@ export default function MusicPlayer() {
           <div className="tvm-meta">
             <h1>{st.title ?? "Nothing playing"}</h1>
             <h2>{[st.artist, st.album].filter(Boolean).join(" — ") || "Ask Aria to play something"}</h2>
+            {st.backend === "subsonic" && !st.title && (
+              <button className="tvm-shuffle" onClick={() => void window.spMusic?.play("")}>Shuffle my library</button>
+            )}
             <div className="tvm-bar"><div style={{ width: `${pct}%` }} /></div>
             <div className="tvm-time">
               <span>{fmt(st.position)}</span>
@@ -242,5 +345,6 @@ const CSS = `
 .tvm-time{display:flex;justify-content:space-between;font-size:1.3vw;opacity:.6;margin:.8vw 0 3vw}
 .tvm-ctl{display:flex;gap:2vw}
 .tvm-ctl button{background:#1d1d27;font-size:2.4vw;width:6vw;height:6vw;padding:0;border-radius:50%}
+.tvm-shuffle{margin:0 0 3vw}
 .tvm-err{color:#ff8a8a;font-size:1.5vw;margin-top:2vw}
 `;
