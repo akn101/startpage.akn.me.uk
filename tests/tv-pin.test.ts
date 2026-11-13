@@ -75,7 +75,7 @@ describe("GET /api/tv/config", () => {
     expect(await (await GET()).json()).toEqual({ profile: "guest", modules: ["clock", "weather"], pinConfigured: true });
     const s = await signIn("tv");
     expect((await (await GET()).json()).profile).toBe("guest");
-    await unlock(s, "private", "sensitive");
+    await unlock(s, "private");
     const owner = await (await GET()).json();
     expect(owner.profile).toBe("owner");
     expect(owner.modules).toContain("money");
@@ -201,5 +201,17 @@ describe("Aria actions + music token", () => {
     expect(decodeProtectedHeader(developerToken)).toEqual({ alg: "ES256", kid: "KEYID12345" });
     const { payload } = await jwtVerify(developerToken, publicKey, { issuer: "TEAMID1234" });
     expect(payload.exp! - payload.iat!).toBeLessThanOrEqual(12 * 3600);
+  });
+});
+
+describe("owner routes accept the private unlock on the TV", () => {
+  it("money/chat/token/brief: 423 before the PIN, through after a private unlock", async () => {
+    hdrs.set("user-agent", TV_UA);
+    const s = await signIn();  // UA-only TV session (no device stamp)
+    const { requireOwner, requireSensitive } = await import("@/lib/auth");
+    expect(((await requireOwner()) as Response).status).toBe(423);
+    await unlock(s, "private");
+    expect(await requireOwner()).toEqual({ uid: "owner-uid" });
+    expect(((await requireSensitive()) as Response).status).toBe(423); // sensitive unchanged
   });
 });

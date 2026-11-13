@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 /**
  * Which dashboard the TV shows. No secrets. Guest (anyone, any install) gets
  * public modules; the owner's profile needs a signed-in session that is
- * PIN-unlocked for "sensitive" on the TV (off the TV, no PIN applies).
+ * PIN-unlocked ("private") on the TV (off the TV, no PIN applies).
  */
 export async function GET() {
   const { ua } = requestDevice();
@@ -15,10 +15,10 @@ export async function GET() {
   let profile: TvProfile = "guest";
   if (s && hasAccess(s)) {
     const tv = isTvSession(s) || isTvUserAgent(ua);
-    const privOk = !isTvSession(s) || (await isUnlocked(s, "private"));
-    const sensOk = !pinApplies(s, ua) || (await isUnlocked(s, "sensitive"));
+    // On the TV the owner profile follows the "private" unlock (15 min, kept alive by /api/lock/touch).
+    const privOk = !(isTvSession(s) || pinApplies(s, ua)) || (await isUnlocked(s, "private"));
     // A TV with no PIN configured can never unlock, so it stays guest.
-    if (privOk && sensOk && (!tv || pinConfigured())) profile = "owner";
+    if (privOk && (!tv || pinConfigured())) profile = "owner";
   }
   const modules = tvModules()[profile];
   return Response.json(

@@ -1,11 +1,11 @@
-import { requireSensitive, NO_STORE } from "@/lib/auth";
+import { requireOwner, NO_STORE } from "@/lib/auth";
 import { developerToken, musicConfigured } from "@/lib/apple-music";
 
 export const dynamic = "force-dynamic";
 
 /** MusicKit JS developer token. Owner profile only (PIN-unlocked on the TV). */
 export async function GET() {
-  const g = await requireSensitive();
+  const g = await requireOwner();
   if (g instanceof Response) return g;
   if (!musicConfigured()) return Response.json({ error: "not_configured" }, { status: 503, headers: NO_STORE });
   try {

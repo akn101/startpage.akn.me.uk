@@ -1,4 +1,4 @@
-import { requireSensitive, NO_STORE } from "@/lib/auth";
+import { requireOwner, NO_STORE } from "@/lib/auth";
 import { moneySnapshot, MoneyNotConfigured } from "@/lib/money";
 
 export const dynamic = "force-dynamic";
@@ -6,7 +6,7 @@ export const maxDuration = 30;
 
 /** Lunch Money snapshot (balances, net worth, this month, recent). PIN-gated on the TV. */
 export async function GET() {
-  const g = await requireSensitive();
+  const g = await requireOwner();
   if (g instanceof Response) return g;
   try {
     return Response.json(await moneySnapshot(), { headers: NO_STORE });

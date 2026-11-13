@@ -91,6 +91,24 @@ export async function requireSensitive(): Promise<{ uid: string } | Response> {
   return { uid };
 }
 
+/**
+ * Gate for the owner's TV profile (money, Aria, Apple Music, brief): like
+ * requireSensitive, but on the TV the 15-minute "private" unlock (extended
+ * by /api/lock/touch while in use) is enough. Browsers are never PIN-gated.
+ */
+export async function requireOwner(): Promise<{ uid: string } | Response> {
+  const session = await getAuthSession();
+  const uid = await getUid();
+  if (!session || !uid) {
+    return Response.json({ error: "Unauthorized" }, { status: 401, headers: NO_STORE });
+  }
+  const { ua } = requestDevice();
+  if (pinApplies(session, ua) && !(await isUnlocked(session, "private"))) {
+    return Response.json({ error: "pin_required", scope: "private" }, { status: 423, headers: NO_STORE });
+  }
+  return { uid };
+}
+
 export const NO_STORE = { "Cache-Control": "no-store, private" };
 
 // Admin = role:admin or projects includes startpage-admin

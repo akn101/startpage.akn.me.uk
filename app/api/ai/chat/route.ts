@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { requireSensitive, NO_STORE } from "@/lib/auth";
+import { requireOwner, NO_STORE } from "@/lib/auth";
 import { chat, cleanMessages } from "@/lib/ai-chat";
 
 export const dynamic = "force-dynamic";
@@ -7,7 +7,7 @@ export const maxDuration = 30;
 
 /** Aria, the TV assistant. Body {messages:[{role,content}]} → {text, actions}. PIN-gated on the TV. */
 export async function POST(req: NextRequest) {
-  const g = await requireSensitive();
+  const g = await requireOwner();
   if (g instanceof Response) return g;
   let body: { messages?: unknown };
   try { body = await req.json(); } catch { body = {}; }
