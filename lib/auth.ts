@@ -1,6 +1,6 @@
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { verifySession, SESSION_COOKIE } from "./session";
-import { isTvSession, unlockRemaining, UNLOCK_COOKIE, type LockScope, type Session } from "./lock";
+import { isTvSession, pinApplies, unlockRemaining, TV_DEVICE_HEADER, UNLOCK_COOKIE, type LockScope, type Session } from "./lock";
 
 /** The signed-in session, ignoring PIN locks. Only the lock routes and
  *  /api/auth/status should need this; everything else uses getAuthSession. */
@@ -58,10 +58,21 @@ export async function requireUid(): Promise<{ uid: string } | Response> {
   return { uid };
 }
 
+/** The caller's user agent and self-reported TV device name (both may be absent). */
+export function requestDevice(): { ua: string | null; device: string | null } {
+  try {
+    const h = headers();
+    return { ua: h.get("user-agent"), device: h.get(TV_DEVICE_HEADER) };
+  } catch {
+    return { ua: null, device: null }; // outside a request (tests, scripts)
+  }
+}
+
 /**
- * Gate for sensitive data (finance, bonds, …) on every device: signed in AND
- * the PIN entered within the last few minutes. Responds 423 with
- * { error: "pin_required", scope: "sensitive" } so <PinGate> can prompt.
+ * Gate for sensitive data (finance, bonds, …): signed in, and — on the TV
+ * only — the PIN entered within the last few minutes. Browsers and other
+ * devices are never PIN-prompted. A locked TV gets 423
+ * { error: "pin_required", scope: "sensitive" } so <PinGate>/the TV app can prompt.
  * Wrap the data route:  const g = await requireSensitive(); if (g instanceof Response) return g;
  */
 export async function requireSensitive(): Promise<{ uid: string } | Response> {
@@ -70,7 +81,8 @@ export async function requireSensitive(): Promise<{ uid: string } | Response> {
   if (!session || !uid) {
     return Response.json({ error: "Unauthorized" }, { status: 401, headers: NO_STORE });
   }
-  if (!(await isUnlocked(session, "sensitive"))) {
+  const { ua } = requestDevice();
+  if (pinApplies(session, ua) && !(await isUnlocked(session, "sensitive"))) {
     return Response.json(
       { error: "pin_required", scope: "sensitive" },
       { status: 423, headers: NO_STORE },

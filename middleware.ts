@@ -37,6 +37,7 @@ export async function middleware(req: NextRequest) {
     pathname.startsWith("/api/auth") ||
     pathname.startsWith("/api/lock/") ||
     pathname === "/api/version" ||
+    pathname === "/api/tv/config" || // generic TV dashboard config; checks the session itself
     pathname.startsWith("/api/notify") ||
     pathname.startsWith("/api/aknclient/") || // own service-key auth in each route
 

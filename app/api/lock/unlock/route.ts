@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getRawSession, hasAccess, NO_STORE } from "@/lib/auth";
-import { LOCK_SCOPES, PIN_RE, signUnlock, sessionKey, unlockCookieOptions, UNLOCK_COOKIE, verifyPin, type LockScope } from "@/lib/lock";
+import { deviceTag, tvDeviceAllowed } from "@/lib/tv-config";
+import { isTvSession, isTvUserAgent, TV_DEVICE_HEADER, LOCK_SCOPES, PIN_RE, signUnlock, sessionKey, unlockCookieOptions, UNLOCK_COOKIE, verifyPin, type LockScope } from "@/lib/lock";
 import { clearFailures, lockedUntil, recordFailure } from "@/lib/pin-attempts";
 
 export const dynamic = "force-dynamic";
@@ -20,6 +21,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "bad_request" }, { status: 400, headers: NO_STORE });
   }
 
+  // Optional STARTPAGE_TV_DEVICES allowlist: which TV installs may unlock the owner profile.
+  const device = req.headers.get(TV_DEVICE_HEADER);
+  const tv = isTvSession(s) || isTvUserAgent(req.headers.get("user-agent"));
+  if (tv && !tvDeviceAllowed(device)) {
+    console.warn(`lock/unlock: TV device ${deviceTag(device)} not in allowlist`);
+    return NextResponse.json({ error: "device_not_allowed" }, { status: 403, headers: NO_STORE });
+  }
+
   const key = sessionKey(s);
   const until = await lockedUntil(key);
   if (until) return NextResponse.json({ error: "locked_out", lockedUntil: until }, { status: 429, headers: NO_STORE });
@@ -35,6 +44,7 @@ export async function POST(req: NextRequest) {
   }
 
   await clearFailures(key);
+  if (tv) console.log(`lock/unlock: TV device ${deviceTag(device)} unlocked ${scope}`);
   const res = NextResponse.json({ ok: true, scope }, { headers: NO_STORE });
   // A sensitive unlock also opens the private scope (one PIN entry, not two).
   const scopes: LockScope[] = scope === "sensitive" ? ["private", "sensitive"] : ["private"];

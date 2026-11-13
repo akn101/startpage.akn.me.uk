@@ -61,16 +61,24 @@ Shape: one opening line; "Today" (calendar + reminders due, in time order);
 of the "wishes" (what people close to them want for them) gently, in second person.
 Plain text with short bullet lines (•). Under 160 words. No preamble, no sign-off.`;
 
+/** Shared Bedrock client (null when AWS credentials are missing). Also used by /api/ai/chat. */
+export function bedrockClient(): AnthropicBedrock | null {
+  if (!process.env.AWS_ACCESS_KEY_ID || !process.env.AWS_SECRET_ACCESS_KEY) return null;
+  return new AnthropicBedrock({
+    awsAccessKey: process.env.AWS_ACCESS_KEY_ID,
+    awsSecretKey: process.env.AWS_SECRET_ACCESS_KEY,
+    awsRegion: process.env.AWS_REGION ?? "eu-west-1",
+  });
+}
+export const bedrockModel = () => process.env.BRIEF_MODEL ?? "eu.anthropic.claude-3-haiku-20240307-v1:0";
+export const londonTime = ln;
+
 export async function aiBrief(b: BriefInput): Promise<{ text: string; ai: boolean }> {
-  if (!process.env.AWS_ACCESS_KEY_ID || !process.env.AWS_SECRET_ACCESS_KEY) return { text: plainBrief(b), ai: false };
+  const bedrock = bedrockClient();
+  if (!bedrock) return { text: plainBrief(b), ai: false };
   try {
-    const bedrock = new AnthropicBedrock({
-      awsAccessKey: process.env.AWS_ACCESS_KEY_ID,
-      awsSecretKey: process.env.AWS_SECRET_ACCESS_KEY,
-      awsRegion: process.env.AWS_REGION ?? "eu-west-1",
-    });
     const r = await bedrock.messages.create({
-      model: process.env.BRIEF_MODEL ?? "eu.anthropic.claude-3-haiku-20240307-v1:0",
+      model: bedrockModel(),
       max_tokens: 500,
       system: SYSTEM,
       messages: [{ role: "user", content: `Now: ${ln(b.now)}\n\n${JSON.stringify(b)}` }],

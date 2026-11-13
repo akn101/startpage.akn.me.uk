@@ -72,23 +72,27 @@ describe("/api/mind", () => {
   });
   afterEach(() => vi.unstubAllGlobals());
 
-  const signIn = async () => {
-    const t = await session.signSession({ uid: "owner-uid", role: "admin", projects: ["*"] } as any);
+  const signIn = async (device?: "tv") => {
+    const t = await session.signSession({ uid: "owner-uid", role: "admin", projects: ["*"], ...(device ? { device } : {}) } as any);
     jar.set(session.SESSION_COOKIE, t);
     return (await session.verifySession(t))!;
   };
   const req = (method: string, body?: unknown) =>
     new Request("http://t/api/mind", { method, body: body ? JSON.stringify(body) : undefined, headers: { "content-type": "application/json" } });
 
-  it("401 signed out, 423 without the sensitive PIN", async () => {
+  it("401 signed out; on the TV 423 without the sensitive PIN; never PIN-gated in a browser", async () => {
     const m = await import("@/app/api/mind/route");
     expect((await m.GET()).status).toBe(401);
-    const s = await signIn();
+    process.env.STARTPAGE_PIN_HASH = await lock.hashPin("482915", 1000);
+    const s = await signIn("tv");
+    jar.set("sp_unlock", await lock.signUnlock(s as any, "private")); // private unlock is not enough
     const r = await m.GET();
     expect(r.status).toBe(423);
     expect(await r.json()).toEqual({ error: "pin_required", scope: "sensitive" });
-    jar.set("sp_unlock", await lock.signUnlock(s as any, "private")); // private unlock is not enough
     expect((await m.POST(req("POST", { kind: "thought", text: "x" }))).status).toBe(423);
+    jar.clear();
+    await signIn();
+    expect((await m.GET()).status).toBe(200);
   });
 
   it("adds a reminder with a parsed date, lists, completes", async () => {

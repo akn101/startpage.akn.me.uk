@@ -4,9 +4,11 @@
 //   private   — TV sessions only. A TV signed in with the access code sees
 //               nothing private until the PIN is entered; it relocks after
 //               UNLOCK_TTL.private or when the TV idles / leaves the app.
-//   sensitive — every device. Routes that call requireSensitive() (finance,
+//   sensitive — TV only. Routes that call requireSensitive() (finance,
 //               bonds, anything you'd not want on a shared screen) need a
-//               fresh PIN entry no older than UNLOCK_TTL.sensitive.
+//               fresh PIN entry no older than UNLOCK_TTL.sensitive when the
+//               caller is the TV. Browsers and other devices behave as if no
+//               PIN were configured (owner ruling: the PIN is for the TV only).
 //
 // An unlock is a short JWT in its own httpOnly cookie, bound to the session
 // it was issued for (sid), so it can't be replayed with another session.
@@ -27,6 +29,8 @@ export const UNLOCK_TTL: Record<LockScope, number> = {
 
 export const TV_UA = "StartpageTV";
 export const isTvUserAgent = (ua: string | null | undefined) => !!ua && ua.includes(TV_UA);
+/** The native TV app sends a random per-install id. Logged; optionally allowlisted for unlock (STARTPAGE_TV_DEVICES); never required otherwise. */
+export const TV_DEVICE_HEADER = "x-startpage-device";
 
 export type Session = SessionData & { iat?: number };
 export const isTvSession = (s: Session | null | undefined) => s?.device === "tv";
@@ -117,3 +121,7 @@ export async function verifyPin(pin: string, stored: string | undefined): Promis
 }
 
 export const pinConfigured = () => !!process.env.STARTPAGE_PIN_HASH;
+
+/** Does the PIN apply to this caller? Only on the TV (a TV session, or a TV user agent). */
+export const pinApplies = (s: Session | null | undefined, ua: string | null | undefined) =>
+  pinConfigured() && (isTvSession(s) || isTvUserAgent(ua));
