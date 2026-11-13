@@ -171,3 +171,35 @@ describe("cleanMessages / buildSnapshot", () => {
     expect(s.recent.map((r) => [r.date, r.amount])).toEqual([["2026-11-11", 2500], ["2026-11-10", -30], ["2026-10-30", -99]]);
   });
 });
+
+describe("Aria actions + music token", () => {
+  it("maps tool calls to TV actions and rejects bad ones", async () => {
+    const { toAction } = await import("@/lib/ai-chat");
+    const mods = ["money", "calendar"];
+    expect(toAction("music_play", { query: " Kind of Blue " }, mods)).toEqual({ type: "music.play", query: "Kind of Blue" });
+    expect(toAction("music_play", {}, mods)).toBeNull();
+    expect(toAction("music_next", {}, mods)).toEqual({ type: "music.next" });
+    expect(toAction("open_module", { module: "money" }, mods)).toEqual({ type: "open", module: "money" });
+    expect(toAction("open_module", { module: "admin" }, mods)).toBeNull();
+    expect(toAction("rm_rf", {}, mods)).toBeNull();
+  });
+
+  it("music token: 401 signed out, 503 unconfigured, valid ES256 JWT when configured", async () => {
+    const { GET } = await import("@/app/api/music/token/route");
+    for (const k of ["APPLE_MUSIC_TEAM_ID", "APPLE_MUSIC_KEY_ID", "APPLE_MUSIC_PRIVATE_KEY"]) delete process.env[k];
+    expect((await GET()).status).toBe(401);
+    await signIn();
+    expect((await GET()).status).toBe(503);
+    const { generateKeyPair, exportPKCS8, jwtVerify, decodeProtectedHeader } = await import("jose");
+    const { privateKey, publicKey } = await generateKeyPair("ES256", { extractable: true });
+    process.env.APPLE_MUSIC_TEAM_ID = "TEAMID1234";
+    process.env.APPLE_MUSIC_KEY_ID = "KEYID12345";
+    process.env.APPLE_MUSIC_PRIVATE_KEY = await exportPKCS8(privateKey);
+    const r = await GET();
+    expect(r.status).toBe(200);
+    const { developerToken } = await r.json();
+    expect(decodeProtectedHeader(developerToken)).toEqual({ alg: "ES256", kid: "KEYID12345" });
+    const { payload } = await jwtVerify(developerToken, publicKey, { issuer: "TEAMID1234" });
+    expect(payload.exp! - payload.iat!).toBeLessThanOrEqual(12 * 3600);
+  });
+});

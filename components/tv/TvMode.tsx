@@ -34,6 +34,8 @@ export default function TvMode() {
   // Detect TV, drop offline caches (private data must not sit on the TV's disk).
   useEffect(() => {
     if (!isTv()) return;
+    // The music player page manages itself: no idle relock/reload mid-song.
+    if (window.location.pathname.startsWith("/tv/music")) return;
     setTv(true);
     document.documentElement.classList.add("tv");
     navigator.serviceWorker?.getRegistrations().then((rs) => rs.forEach((r) => r.unregister())).catch(() => {});

@@ -40,6 +40,27 @@ const nextConfig = {
           },
         ],
       },
+      {
+        // Apple Music (MusicKit JS v3) player for the TV app: Apple's script,
+        // API, media and sign-in hosts. Overrides the default CSP for this page only.
+        source: "/tv/music",
+        headers: [
+          {
+            key: "Content-Security-Policy",
+            value: [
+              "default-src 'self'",
+              "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://js-cdn.music.apple.com",
+              "style-src 'self' 'unsafe-inline'",
+              "img-src 'self' data: blob: https:",
+              "media-src 'self' blob: https:",
+              "connect-src 'self' https://*.apple.com https://*.itunes.apple.com https://*.mzstatic.com",
+              "frame-src https://*.apple.com",
+              "worker-src 'self' blob:",
+              "frame-ancestors 'none'",
+            ].join("; "),
+          },
+        ],
+      },
     ];
   },
 };
