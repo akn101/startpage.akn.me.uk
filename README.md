@@ -37,11 +37,31 @@ Persistent alarms stored in the database (not localStorage). They go off with a 
 ### Auto-reload on deployment
 Polls for new deployments every 30 minutes. If there's a new version and you haven't touched the page in 10 minutes, it reloads silently. So I never have to remember to refresh after pushing changes.
 
+### TV mode (Xiaomi TV app)
+The Android TV wrapper (`startpage-tv`, separate folder) loads the site with a `StartpageTV` user agent. A TV session is locked until the PIN is entered on an on-screen pad; it relocks after 15 minutes idle or when you leave the app. On the TV the page picks up a new deploy within ~20 s. For hot reload while developing, run `npm run dev -- -H 0.0.0.0` and `./tv-dev.sh` in the TV folder (`./tv-dev.sh prod` switches back). The app only loads the startpage origin or a private-LAN dev server, blocks screenshots, and keeps no form data or backups.
+
+### Mind, reminders and the morning brief
+The Mind panel holds what people want for you ("Lyra wants me to be more relaxed"), things on your mind, and reminders, next to your open tasks and upcoming reminders from Bonds (read-only). From ⌘K:
+- `/remind journal tomorrow` adds a reminder due tomorrow at 09:00 (also `tonight`, `friday 6pm`, `in 2 hours`, `at 9am`, ISO dates; Europe/London time).
+- `/mind <text>` adds a thought. Wishes are added in the panel with a person.
+- `/brief` writes a morning summary from today's calendar, todos, reminders, wishes and Bonds, using Claude on Bedrock with the existing `AWS_*` credentials. Without them it shows a plain summary.
+
+Mind, Bonds and the brief are **sensitive**: every device must enter the PIN, and the unlock lasts 3 minutes.
+
+### PIN setup
+```bash
+node scripts/set-pin.mjs | vercel env add STARTPAGE_PIN_HASH production
+```
+The script asks for the PIN twice (hidden) and pipes only its PBKDF2 hash to Vercel. Five wrong entries lock the PIN for 15 minutes, doubling each time.
+
+### Environment variables (new)
+`STARTPAGE_PIN_HASH` (required for TV and sensitive data), `BONDS_API_URL` (vault API base, e.g. `https://prm.akn.me.uk/api/vaults/<id>`), `BONDS_API_TOKEN`, `BRIEF_MODEL` (optional Bedrock model id). Migrations `006_pin_attempts.sql` and `007_mind_and_lockdown.sql` must be applied.
+
 ---
 
 ## Security model
 
-The site is publicly accessible — anyone can see public todos and photos. Logging in (via `/access` with a password) unlocks editing, private data, alarms, calendar, and the camera widget. Supabase anon key isn't exposed in the client bundle at all; all database access goes through server-side API routes using the service role key.
+The site is publicly accessible — anyone can see public todos and photos. Logging in (via `/access` with a password) unlocks editing, private data, alarms, calendar, and the camera widget. Supabase anon key isn't exposed in the client bundle at all; all database access goes through server-side API routes using the service role key, and since migration 007 no table has an anon-key policy. A TV session needs the PIN before anything private shows; Mind, Bonds and the brief need a fresh PIN on every device.
 
 ---
 
