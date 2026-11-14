@@ -9,13 +9,15 @@ type Props = {
   onCancel?: () => void;
   /** Full-screen overlay (TV lock) or inline card (PinGate). */
   overlay?: boolean;
+  /** Check the PIN as soon as this many digits are in (the native TV app uses 6). Off by default. */
+  autoSubmitAt?: number;
 };
 
 const KEYS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "⌫", "0", "OK"];
 const MAX = 12;
 
 /** Remote-friendly PIN pad: arrows + OK on the grid, or number keys directly. */
-export default function PinPad({ scope, title, onUnlocked, onCancel, overlay }: Props) {
+export default function PinPad({ scope, title, onUnlocked, onCancel, overlay, autoSubmitAt }: Props) {
   const [pin, setPin] = useState("");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
@@ -60,6 +62,15 @@ export default function PinPad({ scope, title, onUnlocked, onCancel, overlay }: 
       setBusy(false);
     }
   }, [busy, locked, scope, onUnlocked]);
+
+  // Auto-check once the configured length is reached (short pause so the last dot shows).
+  const autoFired = useRef(false);
+  useEffect(() => {
+    if (!autoSubmitAt || pin.length !== autoSubmitAt) { autoFired.current = false; return; }
+    if (autoFired.current || busy || locked) return;
+    const t = setTimeout(() => { autoFired.current = true; void submit(pin); }, 150);
+    return () => clearTimeout(t);
+  }, [autoSubmitAt, pin, submit, busy, locked]);
 
   const press = useCallback((k: string) => {
     if (locked) return;
