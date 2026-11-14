@@ -7,26 +7,44 @@
 // debit (money out); `to_base` is the amount in the user's primary currency.
 // In the snapshot we flip to the natural sign: spending negative, income positive.
 
+import { cleanAccountName, cleanInstitution, cleanPayee } from "./money-names";
+
 const BASE = "https://dev.lunchmoney.app/v1";
 const TTL_MS = 5 * 60_000;
 const RECENT = 8;
-const TOP_CATEGORIES = 5;
+const TOP_CATEGORIES = 6;
+const LARGEST = 5;
 
+export type MoneyAccount = { name: string; institution: string; balance: number; currency: string; type: string; liability: boolean };
 export type MoneySnapshot = {
-  accounts: { name: string; balance: number; currency: string; type: string }[];
+  accounts: MoneyAccount[];
+  /** Open accounts grouped by currency, each with a native-currency total (liabilities subtracted). */
+  byCurrency: { currency: string; total: number; accounts: MoneyAccount[] }[];
   netWorth: { amount: number; currency: string };
-  month: { spent: number; income: number; currency: string; topCategories: { name: string; amount: number }[] };
+  month: {
+    spent: number; income: number; currency: string;
+    topCategories: { name: string; amount: number }[];
+    largest: { date: string; payee: string; amount: number; currency: string; category: string }[];
+    uncategorised: number;
+  };
   recent: { date: string; payee: string; amount: number; currency: string; category: string }[];
+  upcoming: { date: string; payee: string; amount: number; currency: string }[];
   at: string;
 };
 
 type LmAsset = {
   id: number; type_name: string; name: string; display_name: string | null;
   balance: string; to_base: number; currency: string; closed_on: string | null;
+  institution_name?: string | null;
 };
 type LmPlaid = {
   id: number; type: string; name: string; display_name: string | null;
   balance: string; to_base: number; currency: string; status: string;
+  institution_name?: string | null;
+};
+type LmRecurring = {
+  payee?: string | null; amount?: string | number; currency?: string; to_base?: number;
+  billing_date?: string | null; next_occurrence?: string | null; type?: string;
 };
 type LmCategory = { id: number; name: string; is_group: boolean; group_id: number | null };
 type LmTx = {
@@ -34,6 +52,7 @@ type LmTx = {
   category_id: number | null; category_name: string | null; category_group_name?: string | null;
   is_income: boolean; exclude_from_totals: boolean; has_children: boolean;
   is_group: boolean; group_id: number | null;
+  notes?: string | null; original_name?: string | null;
 };
 
 export class MoneyNotConfigured extends Error {}
@@ -55,20 +74,37 @@ async function lm<T>(path: string, token: string): Promise<T> {
 
 /** Pure: build the snapshot from raw v1 responses. Exported for tests. */
 export function buildSnapshot(
-  raw: { primaryCurrency: string; assets: LmAsset[]; plaid: LmPlaid[]; categories: LmCategory[]; transactions: LmTx[] },
+  raw: {
+    primaryCurrency: string; assets: LmAsset[]; plaid: LmPlaid[]; categories: LmCategory[]; transactions: LmTx[];
+    recurring?: LmRecurring[];
+  },
   now = new Date(),
 ): MoneySnapshot {
   const currency = (raw.primaryCurrency || "gbp").toUpperCase();
-  const accounts: (MoneySnapshot["accounts"][number] & { base: number })[] = [];
-  for (const a of raw.assets) {
-    if (a.closed_on) continue;
-    accounts.push({ name: a.display_name || a.name, balance: r2(num(a.balance)), currency: a.currency.toUpperCase(), type: a.type_name, base: num(a.to_base) });
+  const accounts: (MoneyAccount & { base: number })[] = [];
+  const push = (name: string, display: string | null, inst: string | null | undefined, balance: string, toBase: number, cur: string, type: string) => {
+    const liability = LIABILITY.has(type);
+    accounts.push({
+      name: cleanAccountName(display || name, type),
+      institution: cleanInstitution(inst),
+      balance: r2(num(balance)), currency: cur.toUpperCase(), type, liability, base: num(toBase),
+    });
+  };
+  for (const a of raw.assets) if (!a.closed_on) push(a.name, a.display_name, a.institution_name, a.balance, a.to_base, a.currency, a.type_name);
+  for (const a of raw.plaid) if (a.status !== "inactive" && a.status !== "closed") push(a.name, a.display_name, a.institution_name, a.balance, a.to_base, a.currency, a.type);
+  const netWorth = accounts.reduce((s, a) => s + (a.liability ? -a.base : a.base), 0);
+
+  const groups = new Map<string, { total: number; base: number; accounts: MoneyAccount[] }>();
+  for (const { base, ...a } of [...accounts].sort((x, y) => Math.abs(y.base) - Math.abs(x.base))) {
+    const g = groups.get(a.currency) ?? { total: 0, base: 0, accounts: [] };
+    g.total += a.liability ? -a.balance : a.balance;
+    g.base += Math.abs(base);
+    g.accounts.push(a);
+    groups.set(a.currency, g);
   }
-  for (const a of raw.plaid) {
-    if (a.status === "inactive" || a.status === "closed") continue;
-    accounts.push({ name: a.display_name || a.name, balance: r2(num(a.balance)), currency: a.currency.toUpperCase(), type: a.type, base: num(a.to_base) });
-  }
-  const netWorth = accounts.reduce((s, a) => s + (LIABILITY.has(a.type) ? -a.base : a.base), 0);
+  const byCurrency = [...groups.entries()]
+    .sort((a, b) => (a[0] === currency ? -1 : b[0] === currency ? 1 : b[1].base - a[1].base))
+    .map(([cur, g]) => ({ currency: cur, total: r2(g.total), accounts: g.accounts }));
 
   const cats = new Map(raw.categories.map((c) => [c.id, c]));
   const catName = (t: LmTx) => {
@@ -80,22 +116,36 @@ export function buildSnapshot(
     const g = c?.group_id != null ? cats.get(c.group_id) : undefined;
     return g?.name ?? t.category_group_name ?? catName(t);
   };
+  const row = (t: LmTx) => {
+    const category = catName(t);
+    return {
+      date: t.date,
+      payee: cleanPayee(t.payee, t.notes ?? t.original_name, category),
+      amount: r2(-num(t.amount)),
+      currency: t.currency.toUpperCase(),
+      category,
+    };
+  };
 
   // Split parents are represented by their children; group members by their group row.
   const groupIds = new Set(raw.transactions.filter((t) => t.is_group).map((t) => t.id));
   const txs = raw.transactions.filter((t) => !t.has_children && !(t.group_id != null && groupIds.has(t.group_id)));
 
   const monthStart = iso(new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)));
-  let spent = 0, income = 0;
+  let spent = 0, income = 0, uncategorised = 0;
   const byCat = new Map<string, number>();
+  const spends: LmTx[] = [];
   for (const t of txs) {
-    if (t.date < monthStart || t.exclude_from_totals) continue;
+    if (t.date < monthStart) continue;
+    if (t.category_id == null && !t.category_name) uncategorised++;
+    if (t.exclude_from_totals) continue;
     const base = num(t.to_base);
     if (t.is_income) income -= base; // income is a credit, i.e. negative in v1
     else {
       spent += base; // refunds (negative) reduce spend
       const name = groupName(t);
       byCat.set(name, (byCat.get(name) ?? 0) + base);
+      if (base > 0) spends.push(t);
     }
   }
   const topCategories = [...byCat.entries()]
@@ -103,23 +153,32 @@ export function buildSnapshot(
     .sort((a, b) => b[1] - a[1])
     .slice(0, TOP_CATEGORIES)
     .map(([name, amount]) => ({ name, amount: r2(amount) }));
+  const largest = spends.sort((a, b) => num(b.to_base) - num(a.to_base)).slice(0, LARGEST).map(row);
 
   const recent = [...txs]
     .sort((a, b) => (a.date === b.date ? b.id - a.id : a.date < b.date ? 1 : -1))
     .slice(0, RECENT)
-    .map((t) => ({
-      date: t.date,
-      payee: t.payee || "Unknown",
-      amount: r2(-num(t.amount)),
-      currency: t.currency.toUpperCase(),
-      category: catName(t),
-    }));
+    .map(row);
+
+  const today = iso(now);
+  const upcoming = (raw.recurring ?? [])
+    .map((r) => ({
+      date: (r.next_occurrence || r.billing_date || "").slice(0, 10),
+      payee: cleanPayee(r.payee ?? null),
+      amount: r2(-num(r.amount)),
+      currency: (r.currency || currency).toUpperCase(),
+    }))
+    .filter((r) => r.date >= today && r.payee !== "Unknown")
+    .sort((a, b) => (a.date < b.date ? -1 : 1))
+    .slice(0, 6);
 
   return {
     accounts: accounts.map(({ base: _base, ...a }) => a),
+    byCurrency,
     netWorth: { amount: r2(netWorth), currency },
-    month: { spent: r2(spent), income: r2(income), currency, topCategories },
+    month: { spent: r2(spent), income: r2(income), currency, topCategories, largest, uncategorised },
     recent,
+    upcoming,
     at: now.toISOString(),
   };
 }
@@ -138,12 +197,17 @@ export async function moneySnapshot(): Promise<MoneySnapshot> {
     const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
     // Reach back at least two weeks so "recent" isn't empty on the 1st.
     const from = new Date(Math.min(monthStart.getTime(), now.getTime() - 14 * 86400_000));
-    const [me, assets, plaid, categories, tx] = await Promise.all([
+    // Recurring items are optional: an older account or a plan without them must not break the card.
+    const recurring = lm<LmRecurring[] | { recurring_items?: LmRecurring[] }>(`/recurring_items?start_date=${iso(monthStart)}`, token)
+      .then((r) => (Array.isArray(r) ? r : r.recurring_items ?? []))
+      .catch(() => [] as LmRecurring[]);
+    const [me, assets, plaid, categories, tx, rec] = await Promise.all([
       lm<{ primary_currency: string }>("/me", token),
       lm<{ assets: LmAsset[] }>("/assets", token),
       lm<{ plaid_accounts: LmPlaid[] }>("/plaid_accounts", token),
       lm<{ categories: LmCategory[] }>("/categories", token),
       lm<{ transactions: LmTx[] }>(`/transactions?start_date=${iso(from)}&end_date=${iso(now)}&limit=1000`, token),
+      recurring,
     ]);
     const data = buildSnapshot(
       {
@@ -152,6 +216,7 @@ export async function moneySnapshot(): Promise<MoneySnapshot> {
         plaid: plaid.plaid_accounts ?? [],
         categories: categories.categories ?? [],
         transactions: tx.transactions ?? [],
+        recurring: rec,
       },
       now,
     );

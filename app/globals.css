@@ -396,6 +396,15 @@ html, body, main {
   transition: background 0.15s, border-color 0.15s;
 }
 
+.todo-source {
+  margin-left: auto;
+  font-size: 0.55rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(196,181,253,0.7);
+  flex-shrink: 0;
+}
+
 .todo-item.done .todo-check {
   background: rgba(150,120,255,0.4);
   border-color: rgba(150,120,255,0.6);

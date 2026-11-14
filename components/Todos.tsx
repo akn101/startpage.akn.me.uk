@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useAuth } from "@/context/AuthContext";
+import { bondsTodoId, type BondsTodo } from "@/lib/todo-sync";
 
 interface Todo {
   id: string;
@@ -24,13 +25,16 @@ type MigrateState = "idle" | "loading" | "preview" | "executing" | "done";
 
 export default function Todos({ externalAdd }: Props) {
   const [todos, setTodos] = useState<Todo[]>([]);
+  // Bonds vault tasks, shown in the same list (ticking one ticks it in Bonds).
+  const [bonds, setBonds] = useState<BondsTodo[]>([]);
+  const [bondsDone, setBondsDone] = useState<Set<string>>(new Set());
   const { authenticated } = useAuth();
 
   useEffect(() => {
     const load = () =>
       fetch("/api/data/todos")
         .then((r) => r.json())
-        .then(({ todos: data }) => { if (data) setTodos(data); });
+        .then(({ todos: data, bonds: b }) => { if (data) setTodos(data); setBonds(Array.isArray(b) ? b : []); });
     load();
     window.addEventListener("refreshData", load);
     return () => window.removeEventListener("refreshData", load);
@@ -128,7 +132,18 @@ export default function Todos({ externalAdd }: Props) {
   }, []);
 
   // Done todos sink to bottom
-  const sorted = [...todos.filter((t) => !t.done), ...todos.filter((t) => t.done)];
+  const bondsRows = bonds
+    .map((b) => ({ id: bondsTodoId(b.id), text: b.label, done: bondsDone.has(bondsTodoId(b.id)), is_public: false, bonds: true, people: b.people }));
+  const sorted: (Todo & { bonds?: boolean; people?: string[] })[] = [
+    ...todos.filter((t) => !t.done), ...bondsRows.filter((t) => !t.done),
+    ...todos.filter((t) => t.done), ...bondsRows.filter((t) => t.done),
+  ];
+  const toggleBonds = (id: string) => {
+    const done = !bondsDone.has(id);
+    setBondsDone((prev) => { const n = new Set(prev); if (done) n.add(id); else n.delete(id); return n; });
+    fetch("/api/data/todos", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, done }) })
+      .then((r) => { if (!r.ok) setBondsDone((prev) => { const n = new Set(prev); n.delete(id); return n; }); });
+  };
   const undoneTodos = todos.filter((t) => !t.done);
   const matchedCount = suggestions.filter((s) => s.project !== null).length;
 
@@ -197,10 +212,12 @@ export default function Todos({ externalAdd }: Props) {
               <div
                 key={t.id}
                 className={`todo-item${t.done ? " done" : ""}${!authenticated ? " readonly" : ""}`}
-                onClick={() => authenticated && toggle(t.id)}
+                onClick={() => authenticated && (t.bonds ? toggleBonds(t.id) : toggle(t.id))}
+                title={t.bonds ? "Bonds task: ticking it here ticks it in Bonds" : undefined}
               >
                 <div className="todo-check">{t.done ? "✓" : ""}</div>
-                <span>{t.text}</span>
+                <span>{t.text}{t.people?.length ? ` (${t.people.join(", ")})` : ""}</span>
+                {t.bonds && <span className="todo-source">Bonds</span>}
               </div>
             ))
           )}

@@ -1,8 +1,8 @@
 import { db } from "@/lib/supabase-server";
 
-export interface Todo { id: string; text: string; done: boolean; is_public: boolean }
+export interface Todo { id: string; text: string; done: boolean; is_public: boolean; updated_at?: string | null }
 
-const COLS = "id, text, done, is_public";
+const COLS = "id, text, done, is_public, updated_at";
 
 /** uid null -> public todos only; otherwise that user's todos (private included). */
 export async function listTodos(uid: string | null) {

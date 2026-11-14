@@ -146,7 +146,7 @@ describe("cleanMessages / buildSnapshot", () => {
 
   it("builds the money snapshot with natural signs", async () => {
     const { buildSnapshot } = await import("@/lib/money");
-    const tx = (o: any) => ({ id: 1, payee: "P", currency: "gbp", category_id: 1, category_name: "Food", is_income: false, exclude_from_totals: false, has_children: false, is_group: false, group_id: null, ...o });
+    const tx = (o: any) => ({ id: 1, payee: "Pret", currency: "gbp", category_id: 1, category_name: "Food", is_income: false, exclude_from_totals: false, has_children: false, is_group: false, group_id: null, ...o });
     const s = buildSnapshot({
       primaryCurrency: "gbp",
       assets: [
@@ -163,11 +163,16 @@ describe("cleanMessages / buildSnapshot", () => {
       ],
     }, new Date("2026-11-13T12:00:00Z"));
     expect(s.accounts).toEqual([
-      { name: "Current", balance: 1000, currency: "GBP", type: "cash" },
-      { name: "Amex", balance: 200, currency: "GBP", type: "credit" },
+      { name: "Current", institution: "", balance: 1000, currency: "GBP", type: "cash", liability: false },
+      { name: "Amex", institution: "", balance: 200, currency: "GBP", type: "credit", liability: true },
     ]);
+    expect(s.byCurrency).toEqual([{ currency: "GBP", total: 800, accounts: s.accounts }]);
     expect(s.netWorth).toEqual({ amount: 800, currency: "GBP" });
-    expect(s.month).toEqual({ spent: 30, income: 2500, currency: "GBP", topCategories: [{ name: "Food", amount: 30 }] });
+    expect(s.month).toEqual({
+      spent: 30, income: 2500, currency: "GBP", topCategories: [{ name: "Food", amount: 30 }], uncategorised: 0,
+      largest: [{ date: "2026-11-10", payee: "Pret", amount: -30, currency: "GBP", category: "Food" }],
+    });
+    expect(s.upcoming).toEqual([]);
     expect(s.recent.map((r) => [r.date, r.amount])).toEqual([["2026-11-11", 2500], ["2026-11-10", -30], ["2026-10-30", -99]]);
   });
 });

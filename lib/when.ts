@@ -101,3 +101,38 @@ export function parseWhen(input: string, now = new Date()): Parsed {
   if (!base) return { text: s, due: null };
   return { text: s, due: londonInstant(base.y, base.m, base.d, hour ?? 9, minute) };
 }
+
+export type Repeat = "daily" | "weekly";
+
+/** "journal every day", "stretch daily", "review weekly": pulls the repeat phrase off. */
+export function parseRepeat(input: string): { text: string; repeat: Repeat | null } {
+  const daily = /\b(?:every\s*day|everyday|daily|each\s+day|every\s+(?:night|evening|morning)|nightly)\b/i;
+  const weekly = /\b(?:every\s+week|weekly|each\s+week)\b/i;
+  for (const [re, repeat] of [[daily, "daily"], [weekly, "weekly"]] as const) {
+    if (re.test(input)) return { text: input.replace(re, " ").replace(/\s+/g, " ").trim(), repeat };
+  }
+  return { text: input, repeat: null };
+}
+
+/**
+ * Next due instant for a repeating reminder after it is ticked off: the same
+ * London wall-clock time one day (or week) on, skipping past `now`.
+ * Without a previous due time it lands at 20:00 London tonight, or tomorrow.
+ */
+export function nextRepeat(due: string | null, repeat: Repeat, now = new Date()): Date {
+  const step = repeat === "weekly" ? 7 : 1;
+  if (!due) {
+    const t = londonDate(now);
+    const tonight = londonInstant(t.y, t.m, t.d, 20);
+    return tonight > now ? tonight : londonInstant(t.y, t.m, t.d + 1, 20);
+  }
+  const prev = new Date(due);
+  const off = tzOffset(prev);
+  const wall = new Date(prev.getTime() + off * 60000); // London wall clock as UTC fields
+  let k = step;
+  for (;;) {
+    const next = londonInstant(wall.getUTCFullYear(), wall.getUTCMonth(), wall.getUTCDate() + k, wall.getUTCHours(), wall.getUTCMinutes());
+    if (next > now) return next;
+    k += step;
+  }
+}

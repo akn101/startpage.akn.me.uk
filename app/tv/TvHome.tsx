@@ -1,13 +1,14 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import PinPad from "@/components/tv/PinPad";
 import Glyph from "./Glyph";
 import {
   ago, CalEvent, dateOnlyLabel, dayLabel, dueLabel, eventDayKey, eventRange, eventSub, glyphKind, greeting,
   hourOf, money, startIndex, upcoming, Weather, weatherAlerts, weatherLabel,
 } from "./tv-logic";
+import { mergeTodos, type BondsTodo, type SyncedTodo } from "@/lib/todo-sync";
 import "./tv.css";
 
 // The web bubbles; the native Bubbles.java is a port of this.
@@ -16,6 +17,7 @@ const Screensaver = dynamic(() => import("@/components/Screensaver"), { ssr: fal
 const MIN = 60_000;
 const REFRESH_EVERY = 5 * MIN, WEATHER_EVERY = 30 * MIN, IDLE_AFTER = 10 * MIN, TOUCH_EVERY = 4 * MIN;
 const AUTO_LOCK = 10 * MIN, NIGHT_WAKE = 60_000;
+const BRIEF_EVERY = 60 * MIN, BRIEF_RETRY = 10 * MIN;
 const GUEST_MODULES = ["clock", "weather"];
 const OWNER_MODULES = ["clock", "weather", "calendar", "money", "brief", "todos", "mind", "github", "music", "ask"];
 const KNOWN_CARDS = ["weather", "calendar", "brief", "todos", "mind", "github", "money", "music"];
@@ -43,18 +45,27 @@ type TvConfig = {
   profile: "owner" | "guest"; modules: string[]; pinConfigured?: boolean; displayName?: string;
   location?: { lat?: number; lon?: number; name?: string; tz?: string; timezone?: string } | null; timezone?: string;
 };
-type Todo = { id: string; text: string; done: boolean };
+type Todo = { id: string; text: string; done: boolean; updated_at?: string | null };
+type TodoRes = { todos: Todo[]; bonds?: BondsTodo[]; bondsLocked?: boolean; bondsError?: string };
 type Alarm = { time: string; label?: string; enabled: boolean };
-type MindItem = { id: string; kind: string; text: string; person: string | null; due_at: string | null; done: boolean };
+type MindItem = { id: string; kind: string; text: string; person: string | null; due_at: string | null; done: boolean; repeat?: string | null };
 type Bonds = { tasks: { id: number; label: string; due_at: string | null }[]; reminders: { id: number; label: string; person: string; next: string | null }[] } | null;
 type GhItem = { title: string; url: string; repo: string; owner: string; createdAt: string; ci: string | null };
 type Github = { prs: GhItem[]; reviews: GhItem[]; issues: GhItem[]; repos: { name: string; owner: string; url: string; pushedAt: string; ci: string | null }[] };
+type MoneyTx = { date: string; payee: string; amount: number; currency: string; category: string };
+type MoneyAccount = { name: string; institution: string; balance: number; currency: string; type: string; liability: boolean };
 type Money = {
-  accounts: { name: string; balance: number; currency: string; type: string }[];
+  accounts: MoneyAccount[];
+  byCurrency?: { currency: string; total: number; accounts: MoneyAccount[] }[];
   netWorth: { amount: number; currency: string };
-  month: { spent: number; income: number; currency: string; topCategories: { name: string; amount: number }[] };
-  recent: { date: string; payee: string; amount: number; currency: string; category: string }[];
+  month: {
+    spent: number; income: number; currency: string; topCategories: { name: string; amount: number }[];
+    largest?: MoneyTx[]; uncategorised?: number;
+  };
+  recent: MoneyTx[];
+  upcoming?: { date: string; payee: string; amount: number; currency: string }[];
 };
+type Brief = { text: string; ai?: boolean; at?: string; nextAt?: string };
 type Pin = { scope: "private" | "sensitive"; title: string; then?: () => void };
 
 const isTvUa = () => typeof navigator !== "undefined" && navigator.userAgent.includes("StartpageTV");
@@ -103,12 +114,15 @@ export default function TvHome() {
   const [weatherFailed, setWeatherFailed] = useState(false);
   const [alarms, setAlarms] = useState<Alarm[]>([]);
   const [cal, setCal] = useState<Res<{ events: CalEvent[]; status?: string }> | null>(null);
-  const [todos, setTodos] = useState<Todo[] | null>(null);
+  const [todoRes, setTodoRes] = useState<TodoRes | null>(null);
+  // Local tick times (ms) and Bonds tasks ticked here, so a ticked row lingers briefly, then drops off.
+  const [doneAt, setDoneAt] = useState<Record<string, number>>({});
+  const [bondsTicked, setBondsTicked] = useState<Record<string, BondsTodo>>({});
   const [mind, setMind] = useState<Res<{ items: MindItem[]; bonds: Bonds }> | null>(null);
   const [gh, setGh] = useState<Res<Github> | null>(null);
   const [cash, setCash] = useState<Res<Money> | null>(null);
-  const [brief, setBrief] = useState<{ text: string; at: number } | null>(null);
-  const [briefState, setBriefState] = useState<"idle" | "loading" | "failed">("idle");
+  const [brief, setBrief] = useState<Brief | null>(null);
+  const [briefState, setBriefState] = useState<"idle" | "loading" | "failed" | "locked">("idle");
   const [detail, setDetail] = useState<string | null>(null);
   const [pin, setPin] = useState<Pin | null>(null);
   const [armed, setArmed] = useState<string | null>(null);
@@ -122,6 +136,9 @@ export default function TvHome() {
   const lastWeather = useRef(0);
   const lastTouch = useRef(0);
   const lastGate = useRef(0);
+  const briefNext = useRef(0);
+  const briefBusy = useRef(false);
+  const stageRef = useRef<HTMLElement | null>(null);
   const locking = useRef(false);
   const idleRef = useRef(false);
   const detailFrom = useRef<HTMLElement | null>(null);
@@ -184,9 +201,9 @@ export default function TvHome() {
   }, [config]);
 
   const loadTodos = useCallback(async () => {
-    const r = await getJson<{ todos: Todo[] }>("/api/data/todos");
+    const r = await getJson<TodoRes>("/api/data/todos");
     if (gate(r)) return;
-    setTodos(r.data?.todos ?? []);
+    setTodoRes(r.data ?? { todos: [] });
   }, [gate]);
 
   const loadMind = useCallback(async () => {
@@ -202,6 +219,24 @@ export default function TvHome() {
     setCash(r);
   }, [gate]);
 
+  /** The brief is cached server-side for an hour; this re-reads it when the cached one says it is due. */
+  const loadBrief = useCallback(async (force = false) => {
+    if (briefBusy.current) return;
+    briefBusy.current = true;
+    briefNext.current = Date.now() + BRIEF_RETRY; // until we know better
+    setBriefState((s) => (s === "locked" ? s : "loading"));
+    const r = await getJson<Brief>(`/api/brief${force ? "?refresh=1" : ""}`);
+    briefBusy.current = false;
+    if (r.status === 423 && r.error !== "locked") { setBriefState("locked"); briefNext.current = Date.now() + BRIEF_EVERY; return; }
+    if (gate(r)) { setBriefState("idle"); return; }
+    if (!r.data?.text) { setBriefState("failed"); return; }
+    setBrief(r.data);
+    setBriefState("idle");
+    const due = r.data.nextAt ? Date.parse(r.data.nextAt) : NaN;
+    // A minute's slack so the server sees it as stale; never sooner than five minutes.
+    briefNext.current = Math.max(Date.now() + 5 * MIN, Number.isFinite(due) ? due + MIN : Date.now() + BRIEF_EVERY);
+  }, [gate]);
+
   const refresh = useCallback(() => {
     if (!config) return;
     lastRefresh.current = Date.now();
@@ -214,6 +249,13 @@ export default function TvHome() {
     if (has("money")) jobs.push(loadMoney());
     return Promise.all(jobs);
   }, [config, owner, has, gate, loadTodos, loadMind, loadMoney]);
+
+  // A new profile (unlock, lock, sign-in) re-reads the brief straight away.
+  useEffect(() => {
+    if (!config) return;
+    if (has("brief")) { briefNext.current = 0; void loadBrief(); }
+    else { setBrief(null); setBriefState("idle"); }
+  }, [config, has, loadBrief]);
 
   useEffect(() => { setTvUa(isTvUa()); void check(); }, [check]);
   useEffect(() => {
@@ -244,6 +286,7 @@ export default function TvHome() {
       if (!idleRef.current && n - lastInput.current > IDLE_AFTER && !pin) { idleRef.current = true; setIdle(true); }
       if (n - lastRefresh.current > REFRESH_EVERY) void refresh();
       if (has("weather") && n - lastWeather.current > WEATHER_EVERY) void loadWeather();
+      if (has("brief") && n > briefNext.current) void loadBrief();
       // Keep the PIN unlock alive only while someone is using the screen.
       if (owner && pinConfigured && n - lastInput.current < 15 * MIN && n - lastTouch.current > TOUCH_EVERY) {
         lastTouch.current = n;
@@ -251,7 +294,7 @@ export default function TvHome() {
       }
     }, 1000);
     return () => clearInterval(t);
-  }, [zonedHour, owner, pinConfigured, tvUa, check, pin, refresh, has, loadWeather]);
+  }, [zonedHour, owner, pinConfigured, tvUa, check, pin, refresh, has, loadWeather, loadBrief]);
 
   // ── input: wake, arrows, Escape ───────────────────────────────────────
 
@@ -299,16 +342,6 @@ export default function TvHome() {
     setPin({ scope, title: scope === "sensitive" && owner ? "Confirm it's you" : "Unlock my setup", then });
   }, [owner]);
 
-  const loadBrief = useCallback(async () => {
-    setBriefState("loading");
-    const r = await getJson<{ text: string; at?: string }>("/api/brief");
-    if (r.status === 423 && r.error !== "locked") { setBriefState("idle"); askPin("sensitive", () => void loadBrief()); return; }
-    if (gate(r)) return;
-    if (!r.data) { setBriefState("failed"); return; }
-    setBrief({ text: r.data.text, at: Date.now() });
-    setBriefState("idle");
-  }, [askPin, gate]);
-
   const openDetail = useCallback((id: string) => {
     if (!owner && id !== "weather") return; // non-owners only get the weather
     if (id === "music") { window.location.href = "/tv/music"; return; }
@@ -317,17 +350,38 @@ export default function TvHome() {
       askPin("sensitive", () => { void (id === "mind" ? loadMind() : loadMoney()).then(() => setDetail(id)); });
       return;
     }
+    if (id === "brief" && briefState === "locked") {
+      askPin("private", () => { briefNext.current = 0; void loadBrief(); });
+      return;
+    }
     detailFrom.current = document.activeElement as HTMLElement | null;
     setDetail(id);
-    if (id === "brief") void loadBrief();
-  }, [owner, mind, cash, askPin, loadMind, loadMoney, loadBrief]);
+    if (id === "brief" && !brief && briefState !== "loading") void loadBrief();
+  }, [owner, mind, cash, brief, briefState, askPin, loadMind, loadMoney, loadBrief]);
 
-  const toggleTodo = useCallback(async (t: Todo) => {
-    setTodos((list) => list?.map((x) => (x.id === t.id ? { ...x, done: !x.done } : x)) ?? null);
-    const r = await send("/api/data/todos", "PATCH", { id: t.id, done: !t.done });
-    if (gate(r)) return;
-    if (r.status < 200 || r.status >= 300) void loadTodos();
-  }, [gate, loadTodos]);
+  const toggleTodo = useCallback(async (t: SyncedTodo) => {
+    const done = !t.done;
+    setDoneAt((m) => { const x = { ...m }; if (done) x[t.id] = Date.now(); else delete x[t.id]; return x; });
+    if (t.source === "bonds") {
+      const orig = todoRes?.bonds?.find((b) => `bonds:${b.id}` === t.id) ?? bondsTicked[t.id];
+      setBondsTicked((m) => {
+        const x = { ...m };
+        if (done && orig) x[t.id] = orig; else delete x[t.id];
+        return x;
+      });
+    } else {
+      setTodoRes((r) => r && { ...r, todos: r.todos.map((x) => (x.id === t.id ? { ...x, done } : x)) });
+    }
+    const r = await send("/api/data/todos", "PATCH", { id: t.id, done });
+    if (r.status === 423 && r.error !== "locked") { askPin("private", () => void toggleTodo(t)); }
+    else if (gate(r)) return;
+    if (r.status < 200 || r.status >= 300) {
+      // Put it back the way the server has it.
+      setDoneAt((m) => { const x = { ...m }; delete x[t.id]; return x; });
+      setBondsTicked((m) => { const x = { ...m }; delete x[t.id]; return x; });
+    }
+    void loadTodos();
+  }, [gate, loadTodos, todoRes, bondsTicked, askPin]);
 
   const pressMind = useCallback(async (it: MindItem) => {
     if (doneIds.has(it.id)) return;
@@ -363,14 +417,14 @@ export default function TvHome() {
     const d = gh?.data;
     if (!d) return [];
     const items = [
-      ...d.reviews.map((x) => ({ ...x, kind: "Review" })),
-      ...d.prs.map((x) => ({ ...x, kind: "PR" })),
-      ...d.issues.map((x) => ({ ...x, kind: "Issue" })),
+      ...(d.reviews ?? []).map((x) => ({ ...x, kind: "Review" })),
+      ...(d.prs ?? []).map((x) => ({ ...x, kind: "PR" })),
+      ...(d.issues ?? []).map((x) => ({ ...x, kind: "Issue" })),
     ];
-    if (items.length) return items.slice(0, 7).map((x) => ({ key: x.url + x.kind, main: x.title, sub: `${x.kind} · ${x.repo}`, mark: ciMark(x.ci) }));
-    return d.repos.slice(0, 6).map((r) => ({ key: r.url, main: r.name, sub: `pushed ${ago(Date.parse(r.pushedAt))}`, mark: ciMark(r.ci) }));
+    if (items.length) return items.slice(0, 40).map((x) => ({ key: x.url + x.kind, main: x.title, sub: `${x.kind} · ${x.repo}`, mark: ciMark(x.ci) }));
+    return (d.repos ?? []).slice(0, 6).map((r) => ({ key: r.url, main: r.name, sub: `pushed ${ago(Date.parse(r.pushedAt))}`, mark: ciMark(r.ci) }));
   }, [gh]);
-  const ghOpen = (gh?.data?.reviews.length ?? 0) + (gh?.data?.prs.length ?? 0) + (gh?.data?.issues.length ?? 0);
+  const ghOpen = (gh?.data?.reviews?.length ?? 0) + (gh?.data?.prs?.length ?? 0) + (gh?.data?.issues?.length ?? 0);
 
   const cards = useMemo(() => modules.filter((m) => m !== "clock" && m !== "ask" && KNOWN_CARDS.includes(m)).filter((m) => {
     if (m === "calendar") return !calHidden;
@@ -379,14 +433,45 @@ export default function TvHome() {
     return true;
   }), [modules, calHidden, cash, gh, ghRows]);
 
-  const mindRows = useMemo(() => {
-    const items = [...(mind?.data?.items ?? [])].filter((i) => !i.done);
-    items.sort((a, b) => {
-      const da = a.due_at ? Date.parse(a.due_at) : Infinity, db = b.due_at ? Date.parse(b.due_at) : Infinity;
-      return da - db;
-    });
-    return items;
-  }, [mind]);
+  const todoList = useMemo(() => {
+    const server = todoRes?.bonds ?? [];
+    const seen = new Set(server.map((b) => `bonds:${b.id}`));
+    const bonds = [...server, ...Object.entries(bondsTicked).filter(([k]) => !seen.has(k)).map(([, b]) => b)];
+    return mergeTodos(todoRes?.todos ?? [], bonds, { now, doneAt, doneIds: new Set(Object.keys(bondsTicked)) });
+  }, [todoRes, bondsTicked, doneAt, now]);
+
+  type MindRow =
+    | { kind: "item"; key: string; main: React.ReactNode; sub: string; item: MindItem }
+    | { kind: "bonds"; key: string; main: React.ReactNode; sub: string };
+  const mindGroups = useMemo(() => {
+    const items = (mind?.data?.items ?? []).filter((i) => !i.done);
+    const due = (i: MindItem) => (i.due_at ? Date.parse(i.due_at) : Infinity);
+    const wishes: MindRow[] = items.filter((i) => i.kind === "wish").map((i) => ({
+      kind: "item", key: i.id, item: i, sub: "",
+      main: i.person
+        ? <><span className="tvh-person">{i.person}</span> wants you to {i.text.replace(/^(?:wants you )?to\s+/i, "")}</>
+        : i.text,
+    }));
+    const reminders: (MindRow & { at: number })[] = items.filter((i) => i.kind === "reminder").map((i) => ({
+      kind: "item", key: i.id, item: i, main: i.text, at: due(i),
+      sub: [i.repeat === "daily" ? "Every day" : i.repeat === "weekly" ? "Every week" : "", i.due_at ? dueLabel(Date.parse(i.due_at), now) : "", i.person ?? ""].filter(Boolean).join(" · "),
+    }));
+    for (const r of mind?.data?.bonds?.reminders ?? []) {
+      reminders.push({
+        kind: "bonds", key: `br${r.id}`, main: r.label, at: r.next ? Date.parse(r.next) : Infinity,
+        sub: [r.person, dateOnlyLabel(r.next), "Bonds"].filter(Boolean).join(" · "),
+      });
+    }
+    reminders.sort((a, b) => a.at - b.at);
+    const thoughts: MindRow[] = items.filter((i) => i.kind !== "wish" && i.kind !== "reminder").map((i) => ({
+      kind: "item", key: i.id, item: i, main: i.text, sub: i.person ?? "",
+    }));
+    return [
+      { key: "wish", title: "People want for you", rows: wishes },
+      { key: "reminder", title: "Reminders", rows: reminders as MindRow[] },
+      { key: "thought", title: "Thoughts", rows: thoughts },
+    ];
+  }, [mind, now]);
 
   // ── rendering ─────────────────────────────────────────────────────────
 
@@ -398,9 +483,20 @@ export default function TvHome() {
   // Native drops the big glyph when the weather card is narrower than 340dp (4+ cards to a row at 1440px).
   const wideCards = hero || perRow <= 3;
 
-  const lockedRows = <><Row main="Needs a fresh PIN" /><Row main="Press OK to unlock" muted /></>;
+  const lockedRows = <><Row main="Locked" /><Row main="Press OK to unlock" muted /></>;
+  const timeText = (iso: string | undefined) =>
+    iso ? new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: tz }).format(Date.parse(iso)) : "";
+  const openMark: Mark = { color: "var(--tvh-muted)", filled: false };
+  const doneMark: Mark = { color: "var(--tvh-good)", filled: true };
 
-  function cardBody(id: string): { body: React.ReactNode; meta?: string } {
+  function todoSub(t: SyncedTodo, clickable: boolean): string {
+    if (t.done) return clickable ? "Done · OK to reopen" : "Done";
+    const bits = [t.source === "bonds" ? "Bonds" : "", t.due_at ? dateOnlyLabel(t.due_at) : "", t.people.join(", ")];
+    if (clickable) bits.push("OK to mark done");
+    return bits.filter(Boolean).join(" · ");
+  }
+
+  function cardBody(id: string): { body: React.ReactNode; meta?: string; extra?: number } {
     switch (id) {
       case "weather": {
         if (!weather) return { body: <Note text={weatherFailed ? "Weather unavailable" : "Loading…"} /> };
@@ -445,31 +541,37 @@ export default function TvHome() {
         const evs = upcoming(cal.data?.events ?? []);
         if (cal.status !== 200 || !cal.data) return { body: <Note text="Calendar unavailable" /> };
         if (!evs.length) return { body: <Note text="Nothing coming up" /> };
-        return { body: evs.slice(0, 6).map((e) => <Row key={e.uid + e.start} main={e.summary} sub={eventSub(e)} />) };
+        const shown = evs.slice(0, 10);
+        return { extra: evs.length - shown.length, body: shown.map((e) => <Row key={e.uid + e.start} main={e.summary} sub={eventSub(e)} />) };
       }
       case "todos": {
-        if (!todos) return { body: <Note text="Loading…" /> };
-        const open = todos.filter((t) => !t.done), done = todos.filter((t) => t.done);
-        const list = [...open, ...done].slice(0, 8);
+        if (!todoRes) return { body: <Note text="Loading…" /> };
+        const open = todoList.filter((t) => !t.done);
+        const shown = open.slice(0, 12);
         return {
-          meta: `${open.length} OPEN`,
-          body: list.length ? list.map((t) => (
-            <Row key={t.id} main={t.text} done={t.done} muted={t.done}
-              mark={t.done ? { color: "var(--tvh-accent)", filled: true } : { color: "var(--tvh-muted)", filled: false }} />
-          )) : <Note text="Nothing to do" />,
+          meta: open.length ? `${open.length} OPEN` : undefined,
+          extra: open.length - shown.length,
+          body: shown.length
+            ? shown.map((t) => <Row key={t.id} main={t.text} sub={todoSub(t, false) || undefined} mark={openMark} />)
+            : <Note text={todoRes.bondsLocked ? "All clear here · Bonds tasks locked" : "All clear"} />,
         };
       }
       case "mind": {
         if (!mind) return { body: <Note text="Loading…" /> };
         if (mind.status === 423) return { body: lockedRows };
         if (!mind.data) return { body: <Note text="Mind unavailable" /> };
-        const rows = mindListRows(false).slice(0, 10);
-        return { meta: String(mindRows.length), body: rows.length ? rows : <Note text="Nothing on your mind" /> };
+        const total = mindGroups.reduce((n, g) => n + g.rows.length, 0);
+        return { meta: total ? String(total) : undefined, body: total ? mindListRows(false) : <Note text="Nothing on your mind" /> };
       }
       case "github": {
         if (!gh) return { body: <Note text="Loading…" /> };
         if (gh.status !== 200) return { body: <Note text="GitHub unavailable" /> };
-        return { meta: `${ghOpen} OPEN`, body: ghRows.map((r) => <Row key={r.key} main={r.main} sub={r.sub} mark={r.mark} />) };
+        const shown = ghRows.slice(0, 10);
+        return {
+          meta: ghOpen ? `${ghOpen} OPEN` : undefined,
+          extra: ghRows.length - shown.length,
+          body: shown.map((r) => <Row key={r.key} main={r.main} sub={r.sub} mark={r.mark} />),
+        };
       }
       case "money": {
         if (!cash) return { body: <Note text="Loading…" /> };
@@ -478,29 +580,33 @@ export default function TvHome() {
         if (!d) return { body: <Note text="Money unavailable" /> };
         const m = d.month;
         const f = m.income > 0 ? Math.min(1, m.spent / m.income) : m.spent > 0 ? 1 : 0;
+        const top = m.topCategories[0]?.amount || 1;
         return {
+          meta: "THIS MONTH",
           body: (
             <>
               <div className="tvh-money-big">{money(d.netWorth.amount, d.netWorth.currency, true)}</div>
               <div className="tvh-faint tvh-small">net worth</div>
               <div className="tvh-money-line"><span>Spent {money(m.spent, m.currency, true)}</span><span className="tvh-muted">In {money(m.income, m.currency, true)}</span></div>
               <div className="tvh-bar"><span style={{ width: `${f * 100}%`, background: m.spent > m.income && m.income > 0 ? "var(--tvh-bad)" : "var(--tvh-accent)" }} /></div>
-              {m.topCategories.slice(0, 3).map((c) => (
-                <div key={c.name} className="tvh-money-cat"><span className="tvh-muted">{c.name}</span><span>{money(Math.abs(c.amount), m.currency, true)}</span></div>
+              {m.topCategories.slice(0, 4).map((c) => (
+                <div key={c.name} className="tvh-money-cat" data-fit-item="">
+                  <span className="tvh-muted">{c.name}</span><span>{money(Math.abs(c.amount), m.currency, true)}</span>
+                  <i className="tvh-catbar" style={{ width: `${Math.max(4, (Math.abs(c.amount) / top) * 100)}%` }} />
+                </div>
               ))}
             </>
           ),
         };
       }
       case "brief": {
-        const fresh = brief && new Date(brief.at).toDateString() === new Date().toDateString();
+        if (briefState === "locked") return { body: lockedRows };
+        if (!brief) {
+          return { body: <Note text={briefState === "failed" ? "Brief unavailable · trying again shortly" : "Writing today's brief…"} /> };
+        }
         return {
-          body: (
-            <>
-              <p className={`tvh-brief${fresh ? "" : " muted"}`}>{fresh ? brief!.text : "Your day in a few lines: calendar, todos and reminders."}</p>
-              <p className="tvh-hint">{fresh ? "OK to read it all" : "OK to write it"}</p>
-            </>
-          ),
+          meta: brief.at ? `UPDATED ${timeText(brief.at)}` : undefined,
+          body: <p className="tvh-brief">{brief.text}</p>,
         };
       }
       case "music":
@@ -509,20 +615,30 @@ export default function TvHome() {
     return { body: null };
   }
 
-  /** Mind items (due first), then Bonds reminders and tasks. In the detail, items arm then mark done. */
+  /**
+   * Mind, grouped: what people want for you, reminders (Mind and Bonds), thoughts.
+   * In the detail, items arm on the first OK and are marked done on the second.
+   */
   function mindListRows(clickable: boolean): React.ReactNode[] {
-    const out: React.ReactNode[] = mindRows.map((i) => {
-      const isDone = doneIds.has(i.id);
-      const sub = [i.kind, i.due_at ? dueLabel(Date.parse(i.due_at), now) : "", i.person ?? ""].filter(Boolean).join(" · ");
-      return (
-        <Row key={i.id} main={i.text} done={isDone} muted={isDone}
-          sub={isDone ? "Done" : armed === i.id ? "Press OK again to mark done" : sub} subAccent={armed === i.id && !isDone}
-          onClick={clickable ? () => void pressMind(i) : undefined} />
-      );
-    });
-    const b = mind?.data?.bonds;
-    for (const r of b?.reminders ?? []) out.push(<Row key={`br${r.id}`} main={r.label} sub={["Bonds", r.person, dateOnlyLabel(r.next)].filter(Boolean).join(" · ")} />);
-    for (const t of b?.tasks ?? []) out.push(<Row key={`bt${t.id}`} main={t.label} sub={["Bonds task", t.due_at ? dateOnlyLabel(t.due_at) : ""].filter(Boolean).join(" · ")} />);
+    const out: React.ReactNode[] = [];
+    for (const g of mindGroups) {
+      if (!g.rows.length) continue;
+      out.push(<div key={`h-${g.key}`} className="tvh-group-h">{g.title}</div>);
+      for (const r of g.rows) {
+        if (r.kind === "bonds") {
+          out.push(<Row key={r.key} main={r.main} sub={r.sub} mark={{ color: "var(--tvh-accent)", filled: false }} />);
+          continue;
+        }
+        const i = r.item;
+        const isDone = doneIds.has(i.id);
+        const sub = isDone ? "Done" : armed === i.id ? (i.repeat ? "Press OK again: done for today" : "Press OK again to mark done") : r.sub;
+        out.push(
+          <Row key={r.key} main={r.main} muted={isDone} sub={sub || undefined} subAccent={armed === i.id && !isDone}
+            mark={isDone ? doneMark : { color: g.key === "wish" ? "var(--tvh-accent)" : "var(--tvh-muted)", filled: g.key === "wish" }}
+            onClick={clickable ? () => void pressMind(i) : undefined} />,
+        );
+      }
+    }
     return out;
   }
 
@@ -576,14 +692,19 @@ export default function TvHome() {
         ));
       }
       case "todos": {
-        if (!todos) return <Note text="Loading…" />;
-        const list = [...todos.filter((t) => !t.done), ...todos.filter((t) => t.done)];
-        if (!list.length) return <Note text="Nothing to do" />;
-        return list.map((t) => (
-          <Row key={t.id} main={t.text} done={t.done} muted={t.done} sub={t.done ? "Done · OK to reopen" : "OK to mark done"}
-            mark={t.done ? { color: "var(--tvh-accent)", filled: true } : { color: "var(--tvh-muted)", filled: false }}
+        if (!todoRes) return <Note text="Loading…" />;
+        const rows = todoList.map((t) => (
+          <Row key={t.id} main={t.text} muted={t.done} sub={todoSub(t, true)} mark={t.done ? doneMark : openMark}
             onClick={() => void toggleTodo(t)} />
         ));
+        return (
+          <>
+            {rows.length ? rows : <Note text="All clear" />}
+            {todoRes.bondsLocked && <Note text="Bonds tasks are hidden until you unlock" />}
+            {todoRes.bondsError && <Note text="Bonds is not answering; showing startpage todos only" />}
+            <p className="tvh-hint">Ticked items leave the list after ten minutes · same list as the startpage and Bonds</p>
+          </>
+        );
       }
       case "mind": {
         if (mind?.status === 423) return lockedRows;
@@ -620,33 +741,22 @@ export default function TvHome() {
         const d = cash?.data;
         if (cash?.status === 423) return lockedRows;
         if (!d) return <Note text="Money unavailable" />;
-        return (
-          <div className="tvh-cols">
-            <section className="tvh-section">
-              <h3>Accounts</h3>
-              {d.accounts.map((a) => <div key={a.name + a.type} className="tvh-money-cat"><span className="tvh-muted">{a.name}</span><span>{money(a.balance, a.currency, true)}</span></div>)}
-            </section>
-            <section className="tvh-section">
-              <h3>This month</h3>
-              <div className="tvh-money-cat"><span className="tvh-muted">Spent</span><span>{money(d.month.spent, d.month.currency, true)}</span></div>
-              <div className="tvh-money-cat"><span className="tvh-muted">In</span><span>{money(d.month.income, d.month.currency, true)}</span></div>
-              {d.month.topCategories.map((c) => <div key={c.name} className="tvh-money-cat"><span className="tvh-faint">{c.name}</span><span>{money(Math.abs(c.amount), d.month.currency, true)}</span></div>)}
-            </section>
-            <section className="tvh-section">
-              <h3>Recent</h3>
-              {d.recent.map((t, i) => <Row key={i} main={`${t.payee} · ${money(t.amount, t.currency, false)}`} sub={[dateOnlyLabel(t.date), t.category].filter(Boolean).join(" · ")} />)}
-            </section>
-          </div>
-        );
+        return <MoneyDetail d={d} />;
       }
       case "brief":
-        if (briefState === "loading") return <Note text="Writing your brief…" />;
-        if (briefState === "failed") return <Note text="Brief unavailable" />;
-        return brief ? <p className="tvh-brief-full">{brief.text}</p> : <Note text="Loading…" />;
+        if (briefState === "locked") return lockedRows;
+        if (!brief) return <Note text={briefState === "failed" ? "Brief unavailable · trying again shortly" : "Writing today's brief…"} />;
+        return (
+          <>
+            <p className="tvh-brief-full">{brief.text}</p>
+            <p className="tvh-hint">
+              {[brief.at && `Updated ${timeText(brief.at)}`, brief.nextAt && `next ${timeText(brief.nextAt)}`, brief.ai === false && "plain summary"].filter(Boolean).join(" · ")}
+            </p>
+          </>
+        );
     }
     return null;
   }
-
   const actions: React.ReactNode[] = [];
   if (owner) {
     actions.push(<button key="r" type="button" className="tvh-ghost" data-nav onClick={() => void refresh()}>Refresh</button>);
@@ -658,17 +768,29 @@ export default function TvHome() {
   }
 
   const cardEls = cards.map((id, i) => {
-    const { body, meta } = cardBody(id);
+    const { body, meta, extra } = cardBody(id);
     return (
       <div key={id} role="button" tabIndex={0} data-nav className={`tvh-card${hero ? " hero" : ""}`} style={{ animationDelay: `${i * 60}ms` }}
         onClick={() => openDetail(id)}
         onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openDetail(id); } }}>
         <div className="tvh-card-head"><span className="tvh-card-title">{TITLES[id]}</span>{meta && <span className="tvh-card-meta">{meta}</span>}</div>
-        <div className="tvh-card-body">{body}</div>
+        <div className={`tvh-card-body${id === "brief" ? " fade" : ""}`} data-extra={extra && extra > 0 ? extra : undefined}>
+          {body}
+          <span className="tvh-more" aria-hidden />
+        </div>
       </div>
     );
   });
-  const rows = cards.length <= 4 ? [cardEls] : [cardEls.slice(0, perRow), cardEls.slice(perRow)];
+
+  // Lists end on a whole row: rows that would be cut are hidden and counted in "+N more".
+  useLayoutEffect(() => {
+    const stage = stageRef.current;
+    if (!stage) return;
+    const run = () => stage.querySelectorAll<HTMLElement>(".tvh-card-body").forEach(fitBody);
+    run();
+    window.addEventListener("resize", run);
+    return () => window.removeEventListener("resize", run);
+  });
 
   // Focus the first card once there is something to focus.
   useEffect(() => {
@@ -686,7 +808,7 @@ export default function TvHome() {
   return (
     <div className={`tvh-root${night ? " night" : ""}`}>
       <Screensaver />
-      <main className="tvh-stage" style={{ opacity: idle ? 0.35 : 1 }} aria-hidden={!!detail || !!pin}>
+      <main ref={stageRef} className="tvh-stage" style={{ opacity: idle ? 0.35 : 1 }} aria-hidden={!!detail || !!pin}>
         {!config ? (
           <div className="tvh-loading">Loading…</div>
         ) : hero ? (
@@ -709,8 +831,8 @@ export default function TvHome() {
                 <div className="tvh-actions">{actions}</div>
               </div>
             </header>
-            <div className="tvh-cards">
-              {rows.map((r, i) => <div key={i} className="tvh-cards-row">{r}</div>)}
+            <div className="tvh-cards" style={{ gridTemplateColumns: `repeat(${perRow}, minmax(0, 1fr))` }}>
+              {cardEls}
             </div>
           </>
         )}
@@ -741,6 +863,131 @@ export default function TvHome() {
       )}
 
       <div className="tvh-dim" style={{ opacity: Math.max(night ? 0.55 : 0, idle ? 0.55 : 0) }} />
+    </div>
+  );
+}
+
+// ── whole-row fitting for card lists ──────────────────────────────────────
+
+const FIT_SEL = ":scope > .tvh-row, :scope > .tvh-group-h, :scope > [data-fit-item]";
+
+/** Hide every list row that would be cut by the card's bottom edge, and show how many are hidden. */
+function fitBody(body: HTMLElement) {
+  const items = [...body.querySelectorAll<HTMLElement>(FIT_SEL)];
+  const more = body.querySelector<HTMLElement>(":scope > .tvh-more");
+  const extra = Number(body.dataset.extra || 0);
+  const lineH = parseFloat(getComputedStyle(body).fontSize || "14") * 1.9;
+  const out = new Set<HTMLElement>();
+  const pass = (limit: number) => {
+    out.clear();
+    let cut = false, hidden = 0;
+    for (const it of items) {
+      // offsetTop is layout space (body is the offset parent), so the focus zoom does not skew it.
+      if (cut || it.offsetTop + it.offsetHeight > limit + 0.5) {
+        cut = true; out.add(it);
+        if (!it.classList.contains("tvh-group-h")) hidden++;
+      }
+    }
+    return hidden;
+  };
+  let hidden = pass(body.clientHeight);
+  if (hidden + extra > 0) hidden = pass(body.clientHeight - lineH);
+  // A group heading with nothing visible under it goes too.
+  items.forEach((it, i) => {
+    if (!it.classList.contains("tvh-group-h") || out.has(it)) return;
+    const next = items[i + 1];
+    if (!next || out.has(next) || next.classList.contains("tvh-group-h")) out.add(it);
+  });
+  for (const it of items) it.style.visibility = out.has(it) ? "hidden" : "";
+  if (more) {
+    const n = hidden + extra;
+    const text = n > 0 ? `+${n} more` : "";
+    if (more.textContent !== text) more.textContent = text;
+  }
+}
+
+// ── money detail ───────────────────────────────────────────────────────────
+
+function MoneyDetail({ d }: { d: Money }) {
+  const m = d.month;
+  const groups = d.byCurrency?.length
+    ? d.byCurrency
+    : [{ currency: d.netWorth.currency, total: d.netWorth.amount, accounts: d.accounts }];
+  const top = m.topCategories[0]?.amount || 1;
+  const net = m.income - m.spent;
+  return (
+    <div className="tvh-money">
+      {(m.uncategorised ?? 0) > 0 && (
+        <div className="tvh-nudge">
+          {m.uncategorised} transaction{m.uncategorised === 1 ? "" : "s"} this month {m.uncategorised === 1 ? "has" : "have"} no category · tidy them in Lunch Money so this stays honest
+        </div>
+      )}
+      <div className="tvh-money-cols">
+        <section className="tvh-section">
+          <h3>Net worth</h3>
+          <div className="tvh-money-big">{money(d.netWorth.amount, d.netWorth.currency, true)}</div>
+          {groups.map((g) => (
+            <div key={g.currency} className="tvh-money-group">
+              <div className="tvh-money-cat head"><span>{g.currency}</span><span>{money(g.total, g.currency, true)}</span></div>
+              {g.accounts.map((a, i) => (
+                <div key={`${a.name}${i}`} className="tvh-acct">
+                  <span className="tvh-acct-name">
+                    <span>{a.name}</span>
+                    {a.institution && <span className="tvh-faint">{a.institution}</span>}
+                  </span>
+                  <span className={a.liability ? "tvh-bad" : ""}>{a.liability ? "−" : ""}{money(Math.abs(a.balance), a.currency, true)}</span>
+                </div>
+              ))}
+            </div>
+          ))}
+        </section>
+        <section className="tvh-section">
+          <h3>This month</h3>
+          <div className="tvh-stat3">
+            <span><small>Spent</small>{money(m.spent, m.currency, true)}</span>
+            <span><small>In</small>{money(m.income, m.currency, true)}</span>
+            <span className={net < 0 ? "tvh-bad" : "tvh-good"}><small>Net</small>{net < 0 ? "−" : "+"}{money(Math.abs(net), m.currency, true)}</span>
+          </div>
+          {m.topCategories.map((c) => (
+            <div key={c.name} className="tvh-money-cat">
+              <span className="tvh-muted">{c.name}</span><span>{money(Math.abs(c.amount), m.currency, true)}</span>
+              <i className="tvh-catbar" style={{ width: `${Math.max(3, (Math.abs(c.amount) / top) * 100)}%` }} />
+            </div>
+          ))}
+          {(m.largest?.length ?? 0) > 0 && (
+            <>
+              <h3 className="gap">Largest</h3>
+              {m.largest!.map((t, i) => (
+                <div key={i} className="tvh-tx">
+                  <span className="tvh-tx-name"><span>{t.payee}</span><span className="tvh-faint">{[dateOnlyLabel(t.date), t.category].filter(Boolean).join(" · ")}</span></span>
+                  <span>{money(Math.abs(t.amount), t.currency, false)}</span>
+                </div>
+              ))}
+            </>
+          )}
+        </section>
+        <section className="tvh-section">
+          {(d.upcoming?.length ?? 0) > 0 && (
+            <>
+              <h3>Coming out</h3>
+              {d.upcoming!.map((u, i) => (
+                <div key={i} className="tvh-tx">
+                  <span className="tvh-tx-name"><span>{u.payee}</span><span className="tvh-faint">{dateOnlyLabel(u.date)}</span></span>
+                  <span>{money(Math.abs(u.amount), u.currency, false)}</span>
+                </div>
+              ))}
+              <h3 className="gap">Recent</h3>
+            </>
+          )}
+          {!(d.upcoming?.length) && <h3>Recent</h3>}
+          {d.recent.map((t, i) => (
+            <div key={i} className="tvh-tx">
+              <span className="tvh-tx-name"><span>{t.payee}</span><span className="tvh-faint">{[dateOnlyLabel(t.date), t.category].filter(Boolean).join(" · ")}</span></span>
+              <span className={t.amount > 0 ? "tvh-good" : ""}>{t.amount > 0 ? "+" : "−"}{money(Math.abs(t.amount), t.currency, false)}</span>
+            </div>
+          ))}
+        </section>
+      </div>
     </div>
   );
 }

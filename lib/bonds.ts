@@ -1,4 +1,4 @@
-// Read-only pull from the Bonds vault (prm.akn.me.uk). Server only.
+// Pull from the Bonds vault (prm.akn.me.uk), plus ticking tasks done. Server only.
 // Env: BONDS_API_URL = https://prm.akn.me.uk/api/vaults/<vault id>
 //      BONDS_API_TOKEN = a Bonds personal access token (never sent to the client)
 // Responses are wrapped { success, data }.
@@ -18,6 +18,35 @@ async function get<T>(path: string): Promise<T | null> {
   if (!r.ok) throw new Error(`bonds ${path}: ${r.status}`);
   const body = (await r.json()) as { success?: boolean; data?: T };
   return body.data ?? null;
+}
+
+async function send(path: string, method: "PATCH" | "POST", body: unknown): Promise<void> {
+  const r = await fetch(`${process.env.BONDS_API_URL!}${path}`, {
+    method,
+    headers: { Authorization: `Bearer ${process.env.BONDS_API_TOKEN}`, Accept: "application/json", "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+    cache: "no-store",
+    signal: AbortSignal.timeout(6000),
+  });
+  if (!r.ok) throw new Error(`bonds ${method} ${path}: ${r.status}`);
+}
+
+/** Tick a Bonds vault task done (or reopen it). Throws when Bonds is unset or refuses. */
+export async function setBondsTaskDone(id: number, done: boolean): Promise<void> {
+  if (!bondsConfigured()) throw new Error("bonds not configured");
+  await send(`/tasks/${id}/status`, "PATCH", { status: done ? "done" : "todo" });
+}
+
+/** Best contact match for a person's name ("Sakiya Sultana", "SS"), or null. */
+export async function findBondsContact(name: string): Promise<{ id: string; name: string } | null> {
+  if (!bondsConfigured() || !name.trim()) return null;
+  try {
+    const r = await get<{ contacts?: { id: string; name?: string; score?: number }[] }>(`/search?q=${encodeURIComponent(name.trim())}&per_page=3`);
+    const c = r?.contacts?.[0];
+    return c?.id ? { id: c.id, name: c.name ?? name } : null;
+  } catch {
+    return null;
+  }
 }
 
 type RawTask = {
