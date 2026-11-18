@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { signSession, SESSION_COOKIE, TTL_SECONDS } from "@/lib/session";
+import { isTvUserAgent } from "@/lib/lock";
 
 // In-memory rate limiter: 5 attempts per minute per IP
 const attempts = new Map<string, { count: number; resetAt: number }>();
@@ -24,7 +25,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Too many attempts" }, { status: 429 });
   }
 
-  const { code } = await req.json();
+  let code: unknown;
+  try { ({ code } = await req.json()); } catch { code = undefined; }
 
   if (!code || code !== process.env.STARTPAGE_ACCESS_CODE) {
     return NextResponse.json({ error: "Invalid access code" }, { status: 401 });
@@ -34,11 +36,13 @@ export async function POST(req: NextRequest) {
   attempts.delete(ip);
 
   const token = await signSession({
-    uid: process.env.STARTPAGE_OWNER_UID ?? "owner",
+    uid: process.env.STARTPAGE_OWNER_UID?.trim() || "owner",
     email: null,
     displayName: null,
     role: "admin",
     projects: ["*"],
+    // The TV app's sessions stay PIN-locked until unlocked (see lib/lock.ts).
+    ...(isTvUserAgent(req.headers.get("user-agent")) ? { device: "tv" as const } : {}),
   });
 
   const res = NextResponse.json({ success: true });

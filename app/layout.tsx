@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { AuthProvider } from "@/context/AuthContext";
+import TvMode from "@/components/tv/TvMode";
 
 export const metadata: Metadata = {
   title: "Startpage",
@@ -48,7 +49,7 @@ export default function RootLayout({
           rel="stylesheet"
         />
       </head>
-      <body><AuthProvider>{children}</AuthProvider></body>
+      <body><AuthProvider>{children}</AuthProvider><TvMode /></body>
     </html>
   );
 }

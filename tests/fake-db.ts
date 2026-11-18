@@ -9,6 +9,15 @@ export class FakeDb {
   seed(table: string, rows: Row[]) { this.tables[table] = rows.map((r) => ({ ...r })); }
   rows(table: string) { return this.tables[table] ?? (this.tables[table] = []); }
   from(table: string) { return new Query(this, table); }
+  /** Only the RPCs the routes use. */
+  async rpc(fn: string) {
+    if (this.failNext) { const m = this.failNext; this.failNext = null; return { data: null, error: { message: m } }; }
+    if (fn !== "claim_mac_music_commands") throw new Error(`fake: rpc ${fn}`);
+    const cutoff = Date.now() - 120_000;
+    const out = this.rows("mac_music_commands").filter((r) => !r.taken_at && Date.parse(r.created_at ?? new Date().toISOString()) > cutoff);
+    out.forEach((r) => { r.taken_at = new Date().toISOString(); });
+    return { data: out.map(({ id, fn, arg }) => ({ id, fn, arg })), error: null };
+  }
 }
 
 class Query {

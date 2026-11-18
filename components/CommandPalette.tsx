@@ -96,6 +96,22 @@ export default function CommandPalette({ onAddTodo, cameraEnabled, onCameraToggl
     if (todoText) { onAddTodo(todoText); close(); }
   }, [todoText, onAddTodo, close]);
 
+  // /remind journal tomorrow · /mind <thought> → the PIN-gated Mind panel
+  const isMind   = /^\/(remind|mind)\s/i.test(input);
+  const mindKind = /^\/remind/i.test(input) ? "reminder" : "thought";
+  const mindText = input.replace(/^\/(remind|mind)\s*/i, "").trim();
+  const [mindMsg, setMindMsg] = useState("");
+  const handleAddMind = useCallback(async () => {
+    if (!mindText) return;
+    const r = await fetch("/api/mind", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind: mindKind, text: mindText }) });
+    if (r.status === 423) { setMindMsg("Locked — open the Mind panel and enter your PIN, then try again."); return; }
+    if (!r.ok) { setMindMsg(`Couldn't save (${r.status})`); return; }
+    window.dispatchEvent(new Event("mindChanged"));
+    setMindMsg(""); close();
+  }, [mindText, mindKind, close]);
+
+  const isBrief = /^\/brief\b/i.test(input);
+
   const isRecord   = input.toLowerCase().startsWith("/record");
   const recordText = input.replace(/^\/record\s*/i, "").trim();
 
@@ -161,7 +177,7 @@ export default function CommandPalette({ onAddTodo, cameraEnabled, onCameraToggl
     close();
   }, [plainText, handleNavigate, recordQuery, close]);
 
-  const suppressFilter = isTodo || isRecord || isAlarm || isDim || isCamera || isDisplay || isLogin || isLogout || isClear || isJustSlash;
+  const suppressFilter = isBrief || isMind || isTodo || isRecord || isAlarm || isDim || isCamera || isDisplay || isLogin || isLogout || isClear || isJustSlash;
 
   if (!open && !closing) return null;
 
@@ -215,6 +231,24 @@ export default function CommandPalette({ onAddTodo, cameraEnabled, onCameraToggl
                 <span className="cmdk-icon">＋</span>
                 Add &quot;{todoText}&quot; to todos
               </Command.Item>
+            </Command.Group>
+          )}
+
+          {isBrief && (
+            <Command.Group heading="Mind">
+              <Command.Item value="brief" onSelect={() => { window.dispatchEvent(new Event("mindBrief")); close(); }}>
+                <span className="cmdk-icon">☀️</span>Morning brief
+              </Command.Item>
+            </Command.Group>
+          )}
+
+          {isMind && mindText && (
+            <Command.Group heading="Mind">
+              <Command.Item value="add-mind" onSelect={handleAddMind}>
+                <span className="cmdk-icon">{mindKind === "reminder" ? "⏰" : "🧠"}</span>
+                {mindKind === "reminder" ? "Remind me: " : "On my mind: "}&quot;{mindText}&quot;
+              </Command.Item>
+              {mindMsg && <Command.Item value="mind-msg" disabled>{mindMsg}</Command.Item>}
             </Command.Group>
           )}
 
@@ -394,7 +428,7 @@ export default function CommandPalette({ onAddTodo, cameraEnabled, onCameraToggl
             </Command.Group>
           )}
 
-          {!isTodo && !isRecord && !isAlarm && !isDim && !isBright && !isCamera && !isDisplay && !isLogin && !isLogout && !isClear && !isJustSlash && (
+          {!isBrief && !isMind && !isTodo && !isRecord && !isAlarm && !isDim && !isBright && !isCamera && !isDisplay && !isLogin && !isLogout && !isClear && !isJustSlash && (
             <Command.Group heading="Go to">
               {quickLinks.map((link) => (
                 <Command.Item
@@ -410,7 +444,7 @@ export default function CommandPalette({ onAddTodo, cameraEnabled, onCameraToggl
             </Command.Group>
           )}
 
-          {!isTodo && !isRecord && !isAlarm && !isDim && !isBright && !isCamera && !isDisplay && !isLogin && !isLogout && !isClear && !isJustSlash && (
+          {!isBrief && !isMind && !isTodo && !isRecord && !isAlarm && !isDim && !isBright && !isCamera && !isDisplay && !isLogin && !isLogout && !isClear && !isJustSlash && (
             <Command.Group heading="Actions">
               {!authenticated && (
                 <Command.Item value="login" onSelect={() => { window.location.href = "/api/auth/callback"; close(); }}>
