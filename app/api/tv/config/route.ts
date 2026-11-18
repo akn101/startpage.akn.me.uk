@@ -2,6 +2,7 @@ import { getRawSession, hasAccess, isUnlocked, NO_STORE, requestDevice } from "@
 import { isTvSession, isTvUserAgent, pinApplies, pinConfigured } from "@/lib/lock";
 import { tvLocation, tvModules, type TvProfile } from "@/lib/tv-config";
 import { activeMusicBackend } from "@/lib/music-backend";
+import { macActive } from "@/lib/mac-music";
 
 export const dynamic = "force-dynamic";
 
@@ -29,15 +30,11 @@ export async function GET() {
       pinConfigured: pinApplies(s, ua),
       location: tvLocation(),
       // Which player /tv/music uses: "apple" (MusicKit), "subsonic" (our proxy) or null (none set up).
-      // The owner's Mac (Music.app, their Apple Music account) when its LAN agent is set up: the TV calls it directly.
-      music: { backend: profile === "owner" && macMusic() ? "mac" : activeMusicBackend(), ...(profile === "owner" && macMusic() ? { mac: macMusic() } : {}) },
+      // "mac": the owner's own Music.app (their Apple Music account), relayed by aknClient through /api/music/mac.
+      music: { backend: profile === "owner" && (await macActive()) ? "mac" : activeMusicBackend() },
       ...(profile === "owner" && s?.displayName ? { displayName: s.displayName } : {}),
     },
     { headers: NO_STORE },
   );
 }
 
-function macMusic(): { url: string; token: string } | null {
-  const url = process.env.STARTPAGE_MAC_MUSIC_URL?.trim(), token = process.env.STARTPAGE_MAC_MUSIC_TOKEN?.trim();
-  return url && token ? { url, token } : null;
-}
