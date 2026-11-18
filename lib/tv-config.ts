@@ -7,7 +7,7 @@ export type TvProfile = "guest" | "owner";
 
 export const DEFAULT_TV_MODULES: Record<TvProfile, string[]> = {
   guest: ["clock", "weather"],
-  owner: ["weather", "calendar", "brief", "todos", "mind", "github", "money", "ask"],
+  owner: ["weather", "calendar", "brief", "todos", "mind", "github", "money", "music", "ask"],
 };
 
 const MODULE_ID = /^[a-z][a-z0-9_-]{0,31}$/;

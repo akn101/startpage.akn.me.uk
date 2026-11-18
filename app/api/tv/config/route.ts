@@ -29,9 +29,15 @@ export async function GET() {
       pinConfigured: pinApplies(s, ua),
       location: tvLocation(),
       // Which player /tv/music uses: "apple" (MusicKit), "subsonic" (our proxy) or null (none set up).
-      music: { backend: activeMusicBackend() },
+      // The owner's Mac (Music.app, their Apple Music account) when its LAN agent is set up: the TV calls it directly.
+      music: { backend: profile === "owner" && macMusic() ? "mac" : activeMusicBackend(), ...(profile === "owner" && macMusic() ? { mac: macMusic() } : {}) },
       ...(profile === "owner" && s?.displayName ? { displayName: s.displayName } : {}),
     },
     { headers: NO_STORE },
   );
+}
+
+function macMusic(): { url: string; token: string } | null {
+  const url = process.env.STARTPAGE_MAC_MUSIC_URL?.trim(), token = process.env.STARTPAGE_MAC_MUSIC_TOKEN?.trim();
+  return url && token ? { url, token } : null;
 }

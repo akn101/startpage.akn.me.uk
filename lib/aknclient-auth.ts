@@ -22,7 +22,7 @@ export function authorizeAknclient(req: Request): Response | null {
 
 /** The startpage owner's uid, needed so aknclient rows show in the owner's own views. */
 export function ownerUid(): string | null {
-  return process.env.STARTPAGE_OWNER_UID || null;
+  return process.env.STARTPAGE_OWNER_UID?.trim() || null;
 }
 
 export function missingOwner(): Response {

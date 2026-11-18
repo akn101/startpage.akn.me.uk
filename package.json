@@ -16,6 +16,7 @@
     "@supabase/supabase-js": "^2.49.4",
     "@vladmandic/face-api": "^1.7.15",
     "cmdk": "^1.1.1",
+    "ical.js": "2.2.1",
     "jose": "^6.2.2",
     "next": "14.2.35",
     "next-auth": "^4.24.11",

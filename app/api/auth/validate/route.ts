@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
   attempts.delete(ip);
 
   const token = await signSession({
-    uid: process.env.STARTPAGE_OWNER_UID ?? "owner",
+    uid: process.env.STARTPAGE_OWNER_UID?.trim() || "owner",
     email: null,
     displayName: null,
     role: "admin",
